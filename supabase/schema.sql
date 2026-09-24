@@ -5,31 +5,6 @@
 create extension if not exists "pgcrypto";
 
 -- The application stores the complete Claim object in this JSONB payload so
--- the public feed and reviewer workflow share one source of truth.
-create table if not exists public.truthlens_claims (
-  id text primary key,
-  payload jsonb not null,
-  submitted_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists truthlens_claims_submitted_idx
-  on public.truthlens_claims(submitted_at desc);
-
-alter table public.truthlens_claims enable row level security;
-
-drop policy if exists "public read TruthLens claims" on public.truthlens_claims;
-drop policy if exists "public insert TruthLens claims" on public.truthlens_claims;
-drop policy if exists "public update TruthLens claims" on public.truthlens_claims;
-
-create policy "public read TruthLens claims"
-  on public.truthlens_claims for select
-  using ((payload->>'isDeleted') is distinct from 'true');
-create policy "public insert TruthLens claims"
-  on public.truthlens_claims for insert with check (true);
-create policy "public update TruthLens claims"
-  on public.truthlens_claims for update using (true) with check (true);
-
 -- ─── CLAIMS ───────────────────────────────────────────────────────────
 create table if not exists public.claims (
   id text primary key,
@@ -54,11 +29,16 @@ create table if not exists public.claims (
   intake_error text,
   is_visible_in_under_review boolean not null default true,
   is_visible_in_reviewed_feed boolean not null default true,
+  is_deleted boolean not null default false,
+  payload jsonb not null default '{}'::jsonb,
   is_seed boolean not null default false,
   submitted_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   version_number integer not null default 1
 );
+
+alter table public.claims add column if not exists is_deleted boolean not null default false;
+alter table public.claims add column if not exists payload jsonb not null default '{}'::jsonb;
 
 -- ─── RISK_FLAGS ───────────────────────────────────────────────────────
 create table if not exists public.risk_flags (
@@ -139,6 +119,17 @@ create table if not exists public.timeline_events (
   created_at timestamptz not null default now()
 );
 
+-- ─── SIMILAR_CLAIM_SUPPORTS ───────────────────────────────────────────
+-- Public "same claim" support reports: one row per claim per browser
+-- session. The feed shows only the aggregate count, never voter identity.
+create table if not exists public.similar_claim_supports (
+  id text primary key,
+  claim_id text not null references public.claims(id) on delete cascade,
+  session_id text not null,
+  created_at timestamptz not null default now(),
+  unique (claim_id, session_id)
+);
+
 -- ─── CORRECTIONS ──────────────────────────────────────────────────────
 create table if not exists public.corrections (
   id text primary key,
@@ -167,15 +158,38 @@ create table if not exists public.claim_versions (
 create index if not exists claims_status_idx on public.claims(status);
 create index if not exists claims_intake_idx on public.claims(intake_status);
 create index if not exists claims_submitted_idx on public.claims(submitted_at desc);
+create index if not exists claims_public_feed_idx
+  on public.claims(submitted_at desc) where is_deleted = false;
+drop policy if exists "public read claims" on public.claims;
+drop policy if exists "public insert claims" on public.claims;
+drop policy if exists "public update claims" on public.claims;
+create policy "public read claims" on public.claims
+  for select to anon, authenticated using (is_deleted = false);
+create policy "public insert claims" on public.claims
+  for insert to anon, authenticated
+  with check (
+    is_deleted = false
+    and status = 'unverified'
+    and (payload->>'claimStatus') = 'unverified'
+    and (payload->>'publishedReview') is null
+  );
+create policy "public update claims" on public.claims
+  for update to anon, authenticated
+  using (true)
+  with check (
+    status in ('unverified','in_review','verified_true','verified_false','misleading')
+    and payload is not null
+  );
 create index if not exists risk_flags_claim_idx on public.risk_flags(claim_id);
 create index if not exists intake_checks_claim_idx on public.intake_checks(claim_id);
 create index if not exists evidence_claim_idx on public.evidence(claim_id);
 create index if not exists reviews_claim_idx on public.reviews(claim_id);
 create index if not exists timeline_claim_idx on public.timeline_events(claim_id);
 create index if not exists corrections_claim_idx on public.corrections(claim_id);
+create index if not exists similar_supports_claim_idx on public.similar_claim_supports(claim_id);
 
--- RLS: public read-only for the no-auth demo when using Supabase.
--- Writes go through Next.js server routes with the anon key only.
+-- RLS: public reads for safe feed records. Writes are limited by the claim
+-- policies below; service-role keys are never exposed to the client.
 alter table public.claims enable row level security;
 alter table public.risk_flags enable row level security;
 alter table public.intake_checks enable row level security;
@@ -184,8 +198,31 @@ alter table public.reviews enable row level security;
 alter table public.timeline_events enable row level security;
 alter table public.corrections enable row level security;
 alter table public.claim_versions enable row level security;
+alter table public.similar_claim_supports enable row level security;
 
-create policy "public read claims" on public.claims for select using (true);
+grant usage on schema public to anon, authenticated;
+grant select, insert, update on public.claims to anon, authenticated;
+grant select on public.risk_flags, public.intake_checks, public.evidence,
+  public.reviews, public.timeline_events, public.corrections, public.claim_versions
+  to anon, authenticated;
+
+drop policy if exists "public read risk_flags" on public.risk_flags;
+drop policy if exists "public read intake_checks" on public.intake_checks;
+drop policy if exists "public read evidence" on public.evidence;
+drop policy if exists "public read reviews" on public.reviews;
+drop policy if exists "public read timeline" on public.timeline_events;
+drop policy if exists "public read corrections" on public.corrections;
+drop policy if exists "public read versions" on public.claim_versions;
+drop policy if exists "public insert risk_flags" on public.risk_flags;
+drop policy if exists "public insert intake_checks" on public.intake_checks;
+drop policy if exists "public insert evidence" on public.evidence;
+drop policy if exists "public insert reviews" on public.reviews;
+drop policy if exists "public update reviews" on public.reviews;
+drop policy if exists "public insert timeline" on public.timeline_events;
+drop policy if exists "public insert corrections" on public.corrections;
+drop policy if exists "public update corrections" on public.corrections;
+drop policy if exists "public insert versions" on public.claim_versions;
+
 create policy "public read risk_flags" on public.risk_flags for select using (true);
 create policy "public read intake_checks" on public.intake_checks for select using (true);
 create policy "public read evidence" on public.evidence for select using (true);
@@ -193,9 +230,8 @@ create policy "public read reviews" on public.reviews for select using (true);
 create policy "public read timeline" on public.timeline_events for select using (true);
 create policy "public read corrections" on public.corrections for select using (true);
 create policy "public read versions" on public.claim_versions for select using (true);
+create policy "public read similar supports" on public.similar_claim_supports for select using (true);
 
-create policy "public insert claims" on public.claims for insert with check (true);
-create policy "public update claims" on public.claims for update using (true);
 create policy "public insert risk_flags" on public.risk_flags for insert with check (true);
 create policy "public insert intake_checks" on public.intake_checks for insert with check (true);
 create policy "public insert evidence" on public.evidence for insert with check (true);
@@ -205,3 +241,4 @@ create policy "public insert timeline" on public.timeline_events for insert with
 create policy "public insert corrections" on public.corrections for insert with check (true);
 create policy "public update corrections" on public.corrections for update using (true);
 create policy "public insert versions" on public.claim_versions for insert with check (true);
+create policy "public insert similar supports" on public.similar_claim_supports for insert with check (true);

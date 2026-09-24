@@ -36,7 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAutomation } from "@/hooks/use-automation";
-import { useClaim } from "@/hooks/use-claims";
+import { useClaim, useSharedFeedStatus } from "@/hooks/use-claims";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { addCorrection, hasVotedSameClaim, voteSameClaim } from "@/lib/claim-store";
 import { DeleteClaimButton } from "@/components/claims/delete-claim-button";
@@ -50,6 +50,7 @@ import {
 
 export function ClaimDetail({ id }: { id: string }) {
   const claim = useClaim(id);
+  const { status: feedStatus, retry } = useSharedFeedStatus();
   const { runAutomation, runningId } = useAutomation();
   const hydrated = useHydrated();
   const reduceMotion = useReducedMotion();
@@ -103,10 +104,30 @@ export function ClaimDetail({ id }: { id: string }) {
     });
   }
 
-  if (!hydrated) {
+  if (!hydrated || (feedStatus === "loading" && !claim)) {
     return (
       <div className="container-page py-10 sm:py-14">
         <DetailSkeleton />
+      </div>
+    );
+  }
+
+  if (feedStatus === "error" && !claim) {
+    return (
+      <div className="container-page py-10 sm:py-14">
+        <ErrorState
+          title="Shared feed unavailable"
+          description="We could not reach the shared claim store, so this claim cannot be confirmed right now. Nothing is stored only in this browser — try again in a moment."
+          onRetry={retry}
+        />
+        <div className="mt-4 text-center">
+          <Link
+            href="/feed"
+            className="text-sm font-medium text-cyan-deep underline-offset-4 hover:underline"
+          >
+            Back to public feed
+          </Link>
+        </div>
       </div>
     );
   }
@@ -224,7 +245,9 @@ export function ClaimDetail({ id }: { id: string }) {
               className="h-9 rounded-full border border-teal-300 bg-teal-50 px-4 text-teal-900 hover:bg-teal-100"
             >
               <UsersIcon aria-hidden className="size-4" />
-              Add independent review
+              {(claim.communityReviews?.length ?? 0) > 0
+                ? "Add another review"
+                : "Add independent review"}
             </Button>
           )}
           <p className="max-w-md text-xs leading-relaxed text-muted-foreground">

@@ -74,7 +74,7 @@ export function ClaimCard({
               className="inline-flex items-center gap-1 rounded-full border border-teal-300 bg-teal-50 px-2 py-0.5 text-[11px] font-semibold text-teal-800 tabular-nums"
             >
               <UsersIcon aria-hidden className="size-3" />
-              {reviewCount} review{reviewCount === 1 ? "" : "s"}
+              Reviews ({reviewCount})
             </span>
           )}
           <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
@@ -114,7 +114,7 @@ export function ClaimCard({
           onClick={handleAddReview}
           aria-label={`Add independent review for ${claim.title}`}
           data-testid={`add-review-${claim.id}`}
-          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background/95 px-3 text-xs font-semibold text-muted-foreground opacity-0 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-400 hover:text-teal-800 focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none group-hover:opacity-100 group-focus-within:opacity-100"
+          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-teal-300 bg-teal-50/95 px-3 text-xs font-semibold text-teal-900 opacity-100 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-400 hover:text-teal-900 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <UsersIcon aria-hidden className="size-3.5" />
           Add review
@@ -125,10 +125,10 @@ export function ClaimCard({
           disabled={voted}
           aria-label={voted ? "You already marked this as the same claim" : "Same claim — I wanted to post this"}
           data-testid={`same-claim-vote-${claim.id}`}
-          className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-all ${
+          className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold opacity-100 shadow-sm transition-all ${
             voted
-              ? "cursor-default border-cyan-signal/40 bg-accent text-accent-foreground opacity-100"
-              : "border-border bg-background/95 text-muted-foreground opacity-0 shadow-sm hover:-translate-y-0.5 hover:border-cyan-signal/50 hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+              ? "cursor-default border-cyan-signal/40 bg-accent text-accent-foreground"
+              : "border-border bg-background/95 text-muted-foreground hover:-translate-y-0.5 hover:border-cyan-signal/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           }`}
         >
           <ThumbsUpIcon aria-hidden className="size-3.5" />

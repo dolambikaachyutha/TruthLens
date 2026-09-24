@@ -114,6 +114,31 @@ let cache: Claim[] | null = null;
 let bootstrapPromise: Promise<void> | null = null;
 let refreshPromise: Promise<void> | null = null;
 
+/**
+ * Shared feed status so the UI can render honest loading, error, and empty
+ * states instead of flashing "No claims yet" while the shared store loads.
+ */
+export type SharedFeedStatus = "loading" | "ready" | "error";
+let sharedFeedStatus: SharedFeedStatus = "loading";
+const statusListeners = new Set<(status: SharedFeedStatus) => void>();
+
+export function getSharedFeedStatus(): SharedFeedStatus {
+  return sharedFeedStatus;
+}
+
+export function subscribeSharedFeedStatus(
+  listener: (status: SharedFeedStatus) => void
+): () => void {
+  statusListeners.add(listener);
+  return () => statusListeners.delete(listener);
+}
+
+function setSharedFeedStatus(next: SharedFeedStatus): void {
+  if (sharedFeedStatus === next) return;
+  sharedFeedStatus = next;
+  for (const listener of statusListeners) listener(next);
+}
+
 export function hydrateClaims(claims: Claim[]): void {
   const normalized = claims
     .filter((claim) => claim && typeof claim.id === "string")
@@ -121,6 +146,7 @@ export function hydrateClaims(claims: Claim[]): void {
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   cache = normalized;
   notify(normalized);
+  setSharedFeedStatus("ready");
 }
 
 async function syncClaimToServer(claim: Claim): Promise<void> {
@@ -153,9 +179,14 @@ async function fetchSharedClaims(): Promise<Claim[] | null> {
 /** Load the canonical claims list from Supabase through the server API. */
 export function bootstrapSharedClaims(): Promise<void> {
   if (bootstrapPromise) return bootstrapPromise;
+  if (sharedFeedStatus !== "ready") setSharedFeedStatus("loading");
   bootstrapPromise = (async () => {
     const server = await fetchSharedClaims();
-    if (server) hydrateClaims(server);
+    if (server) {
+      hydrateClaims(server);
+    } else if (sharedFeedStatus !== "ready") {
+      setSharedFeedStatus("error");
+    }
   })().finally(() => {
     bootstrapPromise = null;
   });
@@ -167,9 +198,15 @@ export function refreshSharedClaims(): Promise<void> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     const server = await fetchSharedClaims();
-    if (server) hydrateClaims(server);
+    if (server) {
+      hydrateClaims(server);
+    } else if (sharedFeedStatus !== "ready") {
+      setSharedFeedStatus("error");
+    }
   })()
-    .catch(() => undefined)
+    .catch(() => {
+      if (sharedFeedStatus !== "ready") setSharedFeedStatus("error");
+    })
     .finally(() => {
       refreshPromise = null;
     });
@@ -507,7 +544,7 @@ export function submitCommunityReview(
 
   const now = new Date().toISOString();
   const reviewerLabel =
-    input.reviewerLabel?.trim().slice(0, 60) || "Independent reviewer";
+    input.reviewerLabel?.trim().slice(0, 60) || "Community reviewer";
   const review: CommunityReview = {
     id: `cr-${Date.now().toString(36)}-${Math.random()
       .toString(36)

@@ -26,8 +26,8 @@ export const STATUS_META: Record<
     dotClass: "bg-slate-400",
   },
   in_review: {
-    label: "In Review",
-    short: "In review",
+    label: "Under Review",
+    short: "Under review",
     description: "A reviewer is actively gathering evidence.",
     badgeClass: "border-blue-200 bg-blue-50 text-blue-700",
     dotClass: "bg-blue-500",
@@ -393,7 +393,7 @@ export const CATEGORY_OPTIONS: { value: ClaimCategory | "all"; label: string }[]
 export const STATUS_OPTIONS: { value: ClaimStatus | "all"; label: string }[] = [
   { value: "all", label: "All statuses" },
   { value: "unverified", label: "Unverified" },
-  { value: "in_review", label: "In Review" },
+  { value: "in_review", label: "Under Review" },
   { value: "verified_true", label: "Evidence Supports" },
   { value: "verified_false", label: "Evidence Contradicts" },
   { value: "misleading", label: "Needs Context" },

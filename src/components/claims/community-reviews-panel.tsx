@@ -36,8 +36,11 @@ export function CommunityReviewsPanel({ claim }: { claim: Claim }) {
             </p>
           </div>
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {reviews.length} review{reviews.length === 1 ? "" : "s"}
+        <span
+          className="text-xs font-semibold text-navy tabular-nums"
+          data-testid="community-reviews-count"
+        >
+          Reviews ({reviews.length})
         </span>
       </div>
 
@@ -52,7 +55,7 @@ export function CommunityReviewsPanel({ claim }: { claim: Claim }) {
         </p>
       ) : (
         <ul className="mt-4 space-y-3">
-          {reviews.map((review) => {
+          {reviews.map((review, index) => {
             const stance = COMMUNITY_REVIEW_STANCE_META[review.stance];
             return (
               <li
@@ -62,6 +65,12 @@ export function CommunityReviewsPanel({ claim }: { claim: Claim }) {
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span
+                    className="rounded-full border border-navy/25 bg-navy/5 px-2.5 py-1 text-[11px] font-semibold text-navy uppercase"
+                    data-testid={`community-review-number-${index + 1}`}
+                  >
+                    Review {index + 1}
+                  </span>
+                  <span
                     className={cn(
                       "rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase",
                       stance.badgeClass
@@ -69,8 +78,11 @@ export function CommunityReviewsPanel({ claim }: { claim: Claim }) {
                   >
                     {stance.label}
                   </span>
-                  <span className="text-xs font-medium text-navy">
-                    {review.reviewerLabel}
+                  <span
+                    className="text-xs font-medium text-navy"
+                    data-testid={`community-review-author-${index + 1}`}
+                  >
+                    Reviewed by {review.reviewerLabel}
                   </span>
                   <span
                     className={cn(

@@ -6,10 +6,11 @@ import { FilterXIcon, SearchIcon, XIcon } from "lucide-react";
 import { ClaimCard } from "@/components/claims/claim-card";
 import { CommunityReviewDialog } from "@/components/claims/community-review-dialog";
 import { StatusChangeDialog } from "@/components/claims/status-change-dialog";
-import { EmptyState } from "@/components/states/state-panels";
+import { EmptyState, ErrorState } from "@/components/states/state-panels";
+import { FeedSkeleton } from "@/components/states/skeletons";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useClaims } from "@/hooks/use-claims";
+import { useClaims, useSharedFeedStatus } from "@/hooks/use-claims";
 import {
   CATEGORY_OPTIONS,
   DATE_FILTER_OPTIONS,
@@ -216,6 +217,7 @@ export function FeedBrowser() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewDialogClaim, setReviewDialogClaim] = useState<Claim | null>(null);
   const claims = useClaims();
+  const { status: feedStatus, retry } = useSharedFeedStatus();
 
   const filterArgs = {
     query,
@@ -280,6 +282,29 @@ export function FeedBrowser() {
 
   function handleStatusChanged(updated: Claim) {
     setStatusDialogClaim(updated);
+  }
+
+  if (feedStatus === "loading") {
+    return (
+      <section aria-label="Claim feed" aria-busy="true">
+        <p className="sr-only" role="status">
+          Loading the shared claim feed…
+        </p>
+        <FeedSkeleton count={4} />
+      </section>
+    );
+  }
+
+  if (feedStatus === "error") {
+    return (
+      <section aria-label="Claim feed">
+        <ErrorState
+          title="Shared feed unavailable"
+          description="We could not reach the shared claim store, so the feed may be incomplete. Your claim text is never stored only in this browser — try again in a moment."
+          onRetry={retry}
+        />
+      </section>
+    );
   }
 
   if (claims.length === 0) {
