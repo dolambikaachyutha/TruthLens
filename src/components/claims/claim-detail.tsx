@@ -13,6 +13,7 @@ import {
   QuoteIcon,
   RefreshCwIcon,
   ThumbsUpIcon,
+  UsersIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -21,6 +22,8 @@ import {
   StatusBadge,
 } from "@/components/claims/badges";
 import { AutomationPanel } from "@/components/claims/automation-panel";
+import { CommunityReviewDialog } from "@/components/claims/community-review-dialog";
+import { CommunityReviewsPanel } from "@/components/claims/community-reviews-panel";
 import { HistoryTimeline } from "@/components/claims/history-timeline";
 import { HumanReviewPanel } from "@/components/claims/human-review-panel";
 import { RiskFlagList } from "@/components/claims/risk-flag-list";
@@ -54,6 +57,7 @@ export function ClaimDetail({ id }: { id: string }) {
   const [reportReason, setReportReason] = useState("");
   const [reportUrl, setReportUrl] = useState("");
   const [sameVoted, setSameVoted] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
 
   const retryAutomation = useCallback(() => {
     if (claim) void runAutomation(claim.id);
@@ -212,9 +216,22 @@ export function ClaimDetail({ id }: { id: string }) {
             <ThumbsUpIcon aria-hidden className="size-4" />
             {alreadyVoted ? "Same claim marked" : "Same claim — I wanted to post this"}
           </Button>
+          {!claim.isDeleted && (
+            <Button
+              type="button"
+              onClick={() => setReviewDialogOpen(true)}
+              data-testid="detail-add-review"
+              className="h-9 rounded-full border border-teal-300 bg-teal-50 px-4 text-teal-900 hover:bg-teal-100"
+            >
+              <UsersIcon aria-hidden className="size-4" />
+              Add independent review
+            </Button>
+          )}
           <p className="max-w-md text-xs leading-relaxed text-muted-foreground">
             Marks that you saw this claim too. Not a truth judgment — original
-            text and review history stay unchanged.
+            text and review history stay unchanged. Independent reviews let
+            other reviewers record their own assessments without publishing an
+            official verdict.
           </p>
           {/* Delete only while unverified/in-review and not already deleted.
               Published verdicts cannot be deleted (DP3). */}
@@ -292,6 +309,8 @@ export function ClaimDetail({ id }: { id: string }) {
           />
 
           <HumanReviewPanel claim={claim} />
+
+          <CommunityReviewsPanel claim={claim} />
 
           {published && (
             <section
@@ -654,6 +673,12 @@ export function ClaimDetail({ id }: { id: string }) {
           </div>
         </aside>
       </div>
+
+      <CommunityReviewDialog
+        claim={claim}
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+      />
     </div>
   );
 }

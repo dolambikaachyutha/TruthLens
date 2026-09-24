@@ -124,6 +124,7 @@ export type ReviewActionType =
   | "verdict_published"
   | "correction_submitted"
   | "same_claim_vote"
+  | "community_review"
   | "deleted";
 
 export const DELETE_REASONS = [
@@ -154,6 +155,28 @@ export interface HumanReview {
   startedAt: string;
   note: string;
   evidenceUrls: string[];
+}
+
+/**
+ * Independent reviewer assessment submitted from the public feed.
+ * Multiple reviewers may each add one assessment. These never replace the
+ * official published verdict and never auto-label a claim true or false.
+ */
+export type CommunityReviewStance =
+  | "evidence_supports"
+  | "evidence_contradicts"
+  | "needs_context"
+  | "unclear";
+
+export interface CommunityReview {
+  id: string;
+  reviewerLabel: string;
+  stance: CommunityReviewStance;
+  note: string;
+  evidenceUrls: string[];
+  confidence: ReviewConfidence;
+  sessionId: string;
+  createdAt: string;
 }
 
 export interface ReviewQualityChecklist {
@@ -242,6 +265,7 @@ export interface Claim {
   reviewHistory: ReviewEntry[];
   humanReview: HumanReview | null;
   publishedReview: PublishedReview | null;
+  communityReviews: CommunityReview[];
 }
 
 export interface ClaimSubmission {

@@ -1,8 +1,8 @@
 /**
  * Local persistence adapter.
  *
- * All claim data is stored in browser localStorage under versioned keys.
- * This file replaces the former Supabase client.
+ * The local development store uses a shared Next.js API backed by data/claims.json.
+ * Browser localStorage remains an offline fallback.
  *
  * When a real database is needed in the future:
  *   - Replace the functions below with API calls.
@@ -22,5 +22,5 @@ export function isSupabaseConfigured(): boolean {
 
 /** Returns a human-readable label for the current data source. */
 export function dataSourceLabel(): string {
-  return "Stored on this device (localStorage)";
+  return "Shared by this local server";
 }

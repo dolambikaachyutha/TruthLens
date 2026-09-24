@@ -1,9 +1,12 @@
 import type {
   Claim,
+  CommunityReview,
+  CommunityReviewStance,
   Correction,
   DeleteReason,
   EvidenceRecord,
   IntakeStatus,
+  ReviewConfidence,
   RiskFlag,
   RiskLevel,
 } from "@/lib/types";
@@ -98,10 +101,206 @@ function migrateClaim(raw: Partial<Claim> & { id: string }): Claim {
     evidence: claim.evidence ?? [],
     riskFlags: claim.riskFlags ?? [],
     reviewHistory: claim.reviewHistory ?? [],
+    communityReviews: Array.isArray(claim.communityReviews)
+      ? claim.communityReviews.filter(
+          (review) =>
+            review &&
+            typeof review.id === "string" &&
+            typeof review.note === "string"
+        )
+      : [],
   };
 }
 
 let cache: Claim[] | null = null;
+let bootstrapPromise: Promise<void> | null = null;
+let refreshPromise: Promise<void> | null = null;
+
+export function hydrateClaims(claims: Claim[]): void {
+  const normalized = claims
+    .filter((claim) => claim && typeof claim.id === "string")
+    .map((claim) => migrateClaim(claim))
+    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  writeAll(normalized);
+  notify(normalized);
+}
+
+function readLocalClaims(): Claim[] {
+  if (!hasStorage()) return [];
+  try {
+    const raw = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as (Partial<Claim> & { id: string })[])
+      .filter((item) => item && typeof item.id === "string")
+      .map(migrateClaim);
+  } catch {
+    return [];
+  }
+}
+
+function mergeSharedClaims(server: Claim[], local: Claim[]): Claim[] {
+  const byId = new Map<string, Claim>();
+  for (const claim of server) byId.set(claim.id, migrateClaim(claim));
+  for (const claim of local) {
+    const existing = byId.get(claim.id);
+    if (!existing) {
+      byId.set(claim.id, claim);
+      continue;
+    }
+    const existingTime =
+      Date.parse(existing.updatedAt || existing.submittedAt) || 0;
+    const localTime = Date.parse(claim.updatedAt || claim.submittedAt) || 0;
+    const base = localTime > existingTime ? claim : existing;
+    const other = base === claim ? existing : claim;
+    byId.set(claim.id, {
+      ...other,
+      ...base,
+      body: existing.body,
+      title: existing.title,
+      submittedAt:
+        Date.parse(existing.submittedAt) <= Date.parse(claim.submittedAt)
+          ? existing.submittedAt
+          : claim.submittedAt,
+      evidence: [
+        ...new Map(
+          [...(existing.evidence ?? []), ...(claim.evidence ?? [])].map(
+            (item) => [item.id, item] as const
+          )
+        ).values(),
+      ],
+      reviewHistory: [
+        ...new Map(
+          [...(existing.reviewHistory ?? []), ...(claim.reviewHistory ?? [])].map(
+            (item) => [item.id, item] as const
+          )
+        ).values(),
+      ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      communityReviews: [
+        ...new Map(
+          [
+            ...(existing.communityReviews ?? []),
+            ...(claim.communityReviews ?? []),
+          ].map((item) => [item.id, item] as const)
+        ).values(),
+      ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      sameClaimVoterIds: [
+        ...new Set([
+          ...(existing.sameClaimVoterIds ?? []),
+          ...(claim.sameClaimVoterIds ?? []),
+        ]),
+      ],
+      sameClaimCount: Math.max(
+        existing.sameClaimCount ?? 0,
+        claim.sameClaimCount ?? 0
+      ),
+      publishedReview: existing.publishedReview ?? claim.publishedReview ?? null,
+      humanReview: existing.humanReview ?? claim.humanReview ?? null,
+      isDeleted: existing.isDeleted === true || claim.isDeleted === true,
+      deletedAt: existing.deletedAt ?? claim.deletedAt ?? null,
+      deletedReason: existing.deletedReason ?? claim.deletedReason ?? null,
+      deletedReasonDetail:
+        existing.deletedReasonDetail ?? claim.deletedReasonDetail ?? null,
+      deletedBy: existing.deletedBy ?? claim.deletedBy ?? null,
+      updatedAt:
+        localTime >= existingTime
+          ? (claim.updatedAt ?? existing.updatedAt)
+          : (existing.updatedAt ?? claim.updatedAt),
+    });
+  }
+  return [...byId.values()].sort((a, b) =>
+    b.submittedAt.localeCompare(a.submittedAt)
+  );
+}
+
+async function syncClaimToServer(claim: Claim): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    await fetch("/api/claims", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(claim),
+      cache: "no-store",
+    });
+  } catch {
+    // Keep the local copy available when the local server is offline.
+  }
+}
+
+async function pushLocalOnlyToServer(local: Claim[], server: Claim[]): Promise<void> {
+  const serverIds = new Set(server.map((claim) => claim.id));
+  const missing = local.filter((claim) => !serverIds.has(claim.id));
+  if (missing.length === 0) return;
+  try {
+    await fetch("/api/claims", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(missing),
+      cache: "no-store",
+    });
+  } catch {
+    // Offline: local cache still works.
+  }
+}
+
+async function fetchSharedClaims(): Promise<Claim[] | null> {
+  try {
+    const response = await fetch("/api/claims", { cache: "no-store" });
+    if (!response.ok) return null;
+    const data: unknown = await response.json();
+    if (!Array.isArray(data)) return null;
+    return data as Claim[];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load claims from the shared local server, merge any browser-only claims,
+ * push missing local claims up, then hydrate the client cache.
+ */
+export function bootstrapSharedClaims(): Promise<void> {
+  if (bootstrapPromise) return bootstrapPromise;
+  bootstrapPromise = (async () => {
+    const local = readLocalClaims();
+    const server = await fetchSharedClaims();
+    if (!server) {
+      if (local.length > 0) {
+        writeAll(local.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)));
+        notify(listClaims());
+      }
+      return;
+    }
+    await pushLocalOnlyToServer(local, server);
+    const refreshed = (await fetchSharedClaims()) ?? server;
+    const merged = mergeSharedClaims(refreshed, local);
+    writeAll(merged);
+    notify(merged);
+  })().finally(() => {
+    bootstrapPromise = null;
+  });
+  return bootstrapPromise;
+}
+
+/** Pull the latest shared claims (other browsers / users). */
+export function refreshSharedClaims(): Promise<void> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const server = await fetchSharedClaims();
+    if (!server) return;
+    const local = readLocalClaims();
+    const merged = mergeSharedClaims(server, local);
+    writeAll(merged);
+    notify(merged);
+    await pushLocalOnlyToServer(local, server);
+  })()
+    .catch(() => undefined)
+    .finally(() => {
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
 
 function readAll(): Claim[] {
   if (cache) return cache;
@@ -173,6 +372,7 @@ export function saveClaim(claim: Claim): Claim {
   claims.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   writeAll(claims);
   notify(claims);
+  void syncClaimToServer(claim);
   return claim;
 }
 
@@ -196,6 +396,7 @@ export function updateClaim(
   claims.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   writeAll(claims);
   notify(claims);
+  void syncClaimToServer(next);
   return next;
 }
 
@@ -317,6 +518,7 @@ export function createClaim(input: CreateClaimInput): Claim {
     ],
     humanReview: null,
     publishedReview: null,
+    communityReviews: [],
   };
   return saveClaim(claim);
 }
@@ -390,6 +592,114 @@ export function hasVotedSameClaim(claimId: string): boolean {
   const claim = getStoredClaim(claimId);
   if (!claim) return false;
   return (claim.sameClaimVoterIds ?? []).includes(getSessionId());
+}
+
+export const MIN_COMMUNITY_REVIEW_NOTE_LENGTH = 20;
+
+export interface SubmitCommunityReviewInput {
+  reviewerLabel?: string;
+  stance: CommunityReviewStance;
+  note: string;
+  evidenceUrls?: string[];
+  confidence: ReviewConfidence;
+}
+
+export type SubmitCommunityReviewResult =
+  | { ok: true; claim: Claim; review: CommunityReview }
+  | { ok: false; error: string; claim?: Claim };
+
+export function hasReviewedCommunity(claimId: string): boolean {
+  const claim = getStoredClaim(claimId);
+  if (!claim) return false;
+  const sessionId = getSessionId();
+  return (claim.communityReviews ?? []).some(
+    (review) => review.sessionId === sessionId
+  );
+}
+
+/**
+ * Appends an independent reviewer assessment from the public feed.
+ * Multiple reviewers may each submit one assessment. Never edits claim text,
+ * never overwrites publishedReview, and never auto-labels a claim true/false.
+ */
+export function submitCommunityReview(
+  claimId: string,
+  input: SubmitCommunityReviewInput
+): SubmitCommunityReviewResult {
+  const claim = getStoredClaim(claimId);
+  if (!claim) return { ok: false, error: "Claim not found." };
+  if (claim.isDeleted)
+    return { ok: false, error: "This claim was removed from the public feed." };
+
+  const sessionId = getSessionId();
+  const existing = (claim.communityReviews ?? []).find(
+    (review) => review.sessionId === sessionId
+  );
+  if (existing) {
+    return {
+      ok: false,
+      error: "You already submitted an independent review for this claim.",
+      claim,
+    };
+  }
+
+  const note = input.note.trim();
+  if (note.length < MIN_COMMUNITY_REVIEW_NOTE_LENGTH) {
+    return {
+      ok: false,
+      error: `Write a review note of at least ${MIN_COMMUNITY_REVIEW_NOTE_LENGTH} characters.`,
+      claim,
+    };
+  }
+
+  const evidenceUrls = (input.evidenceUrls ?? [])
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0);
+  for (const url of evidenceUrls) {
+    if (!/^https?:\/\//i.test(url)) {
+      return {
+        ok: false,
+        error: "Evidence URLs must start with http:// or https://.",
+        claim,
+      };
+    }
+  }
+
+  const now = new Date().toISOString();
+  const reviewerLabel =
+    input.reviewerLabel?.trim().slice(0, 60) || "Independent reviewer";
+  const review: CommunityReview = {
+    id: `cr-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2, 7)}`,
+    reviewerLabel,
+    stance: input.stance,
+    note,
+    evidenceUrls,
+    confidence: input.confidence,
+    sessionId,
+    createdAt: now,
+  };
+
+  const next = updateClaim(claimId, {
+    communityReviews: [...(claim.communityReviews ?? []), review],
+    reviewHistory: [
+      ...claim.reviewHistory,
+      {
+        id: `rev-cr-${Date.now().toString(36)}`,
+        action: "community_review",
+        author: reviewerLabel,
+        note:
+          evidenceUrls.length > 0
+            ? `${note} Sources: ${evidenceUrls.join(", ")}`
+            : note,
+        createdAt: now,
+      },
+    ],
+  });
+
+  if (!next) return { ok: false, error: "Could not save this review.", claim };
+  return { ok: true, claim: next, review };
 }
 
 export function voteSameClaim(claimId: string): Claim | undefined {

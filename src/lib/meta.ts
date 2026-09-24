@@ -2,6 +2,7 @@ import type {
   AutomationStatus,
   ClaimCategory,
   ClaimStatus,
+  CommunityReviewStance,
   DeleteReason,
   EvidenceJobStatus,
   EvidenceStrength,
@@ -179,8 +180,56 @@ export const REVIEW_ACTION_LABELS: Record<ReviewActionType, string> = {
   verdict_published: "Verdict published",
   correction_submitted: "Correction reported",
   same_claim_vote: "Same claim marked",
+  community_review: "Independent review",
   deleted: "Claim deleted",
 };
+
+export const COMMUNITY_REVIEW_STANCE_META: Record<
+  CommunityReviewStance,
+  { label: string; description: string; badgeClass: string; dotClass: string }
+> = {
+  evidence_supports: {
+    label: "Evidence supports",
+    description:
+      "This reviewer found public evidence that is consistent with the claim.",
+    badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    dotClass: "bg-emerald-500",
+  },
+  evidence_contradicts: {
+    label: "Evidence contradicts",
+    description:
+      "This reviewer found public evidence that conflicts with the claim.",
+    badgeClass: "border-red-200 bg-red-50 text-red-700",
+    dotClass: "bg-red-500",
+  },
+  needs_context: {
+    label: "Needs context",
+    description:
+      "This reviewer believes important context is missing from the claim.",
+    badgeClass: "border-amber-200 bg-amber-50 text-amber-800",
+    dotClass: "bg-amber-500",
+  },
+  unclear: {
+    label: "Unclear yet",
+    description:
+      "This reviewer could not reach a clear reading from available evidence.",
+    badgeClass: "border-slate-300 bg-slate-50 text-slate-700",
+    dotClass: "bg-slate-400",
+  },
+};
+
+export const COMMUNITY_REVIEW_STANCE_OPTIONS: {
+  value: CommunityReviewStance;
+  label: string;
+}[] = [
+  { value: "evidence_supports", label: "Evidence supports" },
+  { value: "evidence_contradicts", label: "Evidence contradicts" },
+  { value: "needs_context", label: "Needs context" },
+  { value: "unclear", label: "Unclear yet" },
+];
+
+export const COMMUNITY_REVIEW_DISCLAIMER =
+  "Independent reviews are reviewer opinions with supporting notes. They are not official verdicts and are never automatically labeled true or false.";
 
 export const DELETE_REASON_LABELS: Record<DeleteReason, string> = {
   spam: "Spam",

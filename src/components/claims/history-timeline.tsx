@@ -14,6 +14,7 @@ const dotClassByAction: Record<ReviewEntry["action"], string> = {
   verdict_published: "bg-emerald-500 ring-emerald-100",
   correction_submitted: "bg-amber-500 ring-amber-100",
   same_claim_vote: "bg-indigo-500 ring-indigo-100",
+  community_review: "bg-teal-500 ring-teal-100",
   deleted: "bg-red-500 ring-red-100",
 };
 

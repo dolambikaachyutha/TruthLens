@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FilterXIcon, SearchIcon, XIcon } from "lucide-react";
 import { ClaimCard } from "@/components/claims/claim-card";
+import { CommunityReviewDialog } from "@/components/claims/community-review-dialog";
 import { StatusChangeDialog } from "@/components/claims/status-change-dialog";
 import { EmptyState } from "@/components/states/state-panels";
 import { Input } from "@/components/ui/input";
@@ -127,9 +128,11 @@ function sortClaims(claims: Claim[], sort: SortValue): Claim[] {
 function ClaimGrid({
   claims,
   onStatusChange,
+  onAddReview,
 }: {
   claims: Claim[];
   onStatusChange?: (claim: Claim) => void;
+  onAddReview?: (claim: Claim) => void;
 }) {
   const reduceMotion = useReducedMotion();
   return (
@@ -153,6 +156,7 @@ function ClaimGrid({
               claim={claim}
               index={index}
               onStatusChange={onStatusChange}
+              onAddReview={onAddReview}
             />
           </motion.div>
         ))}
@@ -209,6 +213,8 @@ export function FeedBrowser() {
   const [sort, setSort] = useState<SortValue>(DEFAULT_SORT);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusDialogClaim, setStatusDialogClaim] = useState<Claim | null>(null);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewDialogClaim, setReviewDialogClaim] = useState<Claim | null>(null);
   const claims = useClaims();
 
   const filterArgs = {
@@ -265,6 +271,11 @@ export function FeedBrowser() {
   function openStatusDialog(claim: Claim) {
     setStatusDialogClaim(claim);
     setStatusDialogOpen(true);
+  }
+
+  function openReviewDialog(claim: Claim) {
+    setReviewDialogClaim(claim);
+    setReviewDialogOpen(true);
   }
 
   function handleStatusChanged(updated: Claim) {
@@ -456,10 +467,15 @@ export function FeedBrowser() {
               <p className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
                 No reviewed claims yet. Verdicts appear here only after a
                 Community reviewer publishes one with a completed quality
-                checklist.
+                checklist. Other reviewers can still add independent reviews
+                from any claim card.
               </p>
             ) : (
-              <ClaimGrid claims={reviewed} onStatusChange={openStatusDialog} />
+              <ClaimGrid
+                claims={reviewed}
+                onStatusChange={openStatusDialog}
+                onAddReview={openReviewDialog}
+              />
             )}
           </div>
 
@@ -477,12 +493,15 @@ export function FeedBrowser() {
               <p className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-sm text-muted-foreground">
                 No claims are waiting for review right now. Every unverified
                 claim is public here as soon as it is submitted — they stay
-                Unverified until a human publishes a verdict.
+                Unverified until a human publishes a verdict. Use{" "}
+                <strong className="text-navy">Add review</strong> on a claim
+                card to record your own assessment.
               </p>
             ) : (
               <ClaimGrid
                 claims={underReview}
                 onStatusChange={openStatusDialog}
+                onAddReview={openReviewDialog}
               />
             )}
           </div>
@@ -505,6 +524,7 @@ export function FeedBrowser() {
               <ClaimGrid
                 claims={processing}
                 onStatusChange={openStatusDialog}
+                onAddReview={openReviewDialog}
               />
             </div>
           )}
@@ -519,6 +539,18 @@ export function FeedBrowser() {
           if (!open) setStatusDialogClaim(null);
         }}
         onStatusChanged={handleStatusChanged}
+      />
+
+      <CommunityReviewDialog
+        claim={reviewDialogClaim}
+        open={reviewDialogOpen}
+        onOpenChange={(open) => {
+          setReviewDialogOpen(open);
+          if (!open) setReviewDialogClaim(null);
+        }}
+        onReviewAdded={(updated) => {
+          setReviewDialogClaim(updated);
+        }}
       />
     </section>
   );

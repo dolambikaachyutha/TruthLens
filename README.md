@@ -15,6 +15,7 @@ TruthLens is a public civic-tech platform for triaging potentially misleading cl
 - Runs neutral risk analysis for signals such as sensational language, shouting, and missing sources.
 - Provides optional source reachability, metadata, Wayback, duplicate, and fact-check checks.
 - Gives reviewers a public workflow for evidence notes, confidence, quality checks, and status history.
+- Lets any visitor add an independent review from the feed; multiple reviewers may each record one assessment without publishing an official verdict.
 - Provides a searchable feed with category, status, risk, platform, date, evidence, and sorting filters.
 - Shows claim details, source links, corrections, evidence, signals, and review history.
 
@@ -28,6 +29,7 @@ TruthLens is a public civic-tech platform for triaging potentially misleading cl
 | `/claims/[id]` | View claim evidence and history |
 | `/review` | Review claims and record findings |
 | `/methodology` | Review standards and terminology |
+| `/api/claims` | Shared local-server claim store (`data/claims.json`) |
 
 ## Technology
 
@@ -35,6 +37,7 @@ TruthLens is a public civic-tech platform for triaging potentially misleading cl
 - Tailwind CSS v4 and shadcn/ui components
 - React Hook Form and Zod validation
 - Motion for React animations
+- Shared claim storage on the local Next.js server (`/api/claims` → `data/claims.json`)
 - Supabase integration is optional
 - Sonner notifications
 - Playwright end-to-end tests
@@ -48,7 +51,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The project does not seed demo claims. Without Supabase credentials, the app uses the browser's local storage and displays honest empty states until a claim is submitted.
+Open `http://localhost:3000`. The project does not seed demo claims. In local development, claims are stored by the Next.js server in `data/claims.json`, so every browser connected to the same local server sees the same feed and claim details. Browser local storage is retained as an offline fallback.
 
 ### Environment Variables
 

@@ -525,3 +525,57 @@ The three central principles are:
 3. Submitted claims cannot be edited after submission, but controlled,
    reason-based deletion is available for valid moderation, privacy, safety,
    duplicate, or operational reasons.
+
+---
+
+## Multi-reviewer independent assessments (feed)
+
+### Decision
+
+Any public visitor may add an **independent review** from the feed (or claim
+detail) without authentication.
+
+- Multiple reviewers may each submit one assessment per claim.
+- Each assessment records: optional reviewer name, stance, note, optional
+  evidence URL, confidence, timestamp, and session id.
+- Independent reviews **never** replace `publishedReview`, never change
+  `claimStatus` to Verified True/False/Misleading, and are never automatic
+  truth labels.
+- Original claim text and the official published verdict remain preserved.
+- Timeline event action: `community_review`.
+- One assessment per browser session per claim prevents silent spam while still
+  allowing other sessions/reviewers to add their own.
+
+### Rationale
+
+Reviewers other than the primary Community reviewer need a lightweight way to
+record findings on the public feed. Keeping these as append-only independent
+assessments preserves audit integrity and meets the rule that automation and
+UI shortcuts never auto-label a claim true or false.
+
+---
+
+## Shared local-server claim storage
+
+### Decision
+
+Claims are stored on the Next.js local server at `data/claims.json` through
+the public `/api/claims` routes. Every browser connected to the same server
+sees the same feed and claim details.
+
+- `GET /api/claims` returns the shared claim list.
+- `POST /api/claims` upserts one claim or a batch of claims.
+- The client bootstraps from the server, merges any browser-only offline
+  cache, and pushes missing local claims up so prior localStorage data is
+  migrated onto the shared server.
+- Updates (status, reviews, votes, deletes, evidence) write through to the
+  server; the client refreshes on an interval and on window focus.
+- Original claim text is never rewritten by the merge; array fields
+  (history, evidence, community reviews) are unioned by id.
+
+### Rationale
+
+A single shared queue is required so the public feed is visible to everyone,
+not only the browser that submitted a claim. A file-backed store inside the
+same Next.js Node service keeps the deployment as one web service (no separate
+Express backend) and needs no authentication or external secrets.
