@@ -1,20 +1,23 @@
 import type { Claim } from "@/lib/types";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseUrl =
+  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabasePublishableKey =
+  process.env.SUPABASE_PUBLISHABLE_KEY ??
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export function isSupabaseClaimsConfigured(): boolean {
-  return Boolean(supabaseUrl && supabaseAnonKey);
+  return Boolean(supabaseUrl && supabasePublishableKey);
 }
 
 function restUrl(): string {
-  return `${supabaseUrl}/rest/v1/truthlens_claims`;
+  return `${supabaseUrl}/rest/v1/claims`;
 }
 
 function headers(prefer?: string): HeadersInit {
   return {
-    apikey: supabaseAnonKey ?? "",
-    Authorization: `Bearer ${supabaseAnonKey ?? ""}`,
+    apikey: supabasePublishableKey ?? "",
+    Authorization: `Bearer ${supabasePublishableKey ?? ""}`,
     "Content-Type": "application/json",
     ...(prefer ? { Prefer: prefer } : {}),
   };
@@ -166,6 +169,21 @@ export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {
     });
     const rows = merged.map((claim) => ({
       id: claim.id,
+      text: claim.body,
+      platform: claim.platform ?? null,
+      category: claim.category,
+      source_url: claim.sourceUrl,
+      status: claim.claimStatus,
+      intake_status: claim.intakeStatus,
+      automation_status: claim.automationStatus,
+      risk_level: claim.riskLevel,
+      automated_evidence_count: claim.automatedEvidenceCount,
+      submitted_session_id: claim.submittedSessionId ?? null,
+      intake_completed_at: claim.intakeCompletedAt,
+      intake_error: claim.intakeError,
+      is_visible_in_under_review: claim.isVisibleInUnderReview,
+      is_visible_in_reviewed_feed: claim.isVisibleInReviewedFeed,
+      is_deleted: claim.isDeleted === true,
       payload: claim,
       submitted_at: claim.submittedAt,
       updated_at: claim.updatedAt,

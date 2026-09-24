@@ -561,7 +561,7 @@ UI shortcuts never auto-label a claim true or false.
 
 Supabase is the only source of truth for claims, feed visibility, statuses,
 reviews, evidence, support counts, and timestamps. The public `/api/claims`
-route reads and writes the `truthlens_claims` table. Every browser refreshes
+route reads and writes the `public.claims` table. Every browser refreshes
 from that same database-backed list.
 
 - `GET /api/claims` returns the shared claim list.
