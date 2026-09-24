@@ -84,4 +84,4 @@
 - `FACTCHECK_API_URL` continues to work as an optional alternate endpoint.
 - Quality checklist = date, location, and scope confirmed by the reviewer.
 - Spam/abuse/PII check is a conservative content heuristic (blocks only clearly abusive patterns), not an auto-verdict.
-- Local development fallback = existing localStorage store, labeled in UI copy as device-local until Supabase is connected.
+- Local development fallback = localStorage mirror of the shared server store (`/api/claims` → `data/claims.json`); UI copy reflects the shared queue. Optional Supabase integration can replace the file store later.

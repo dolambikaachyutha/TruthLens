@@ -51,7 +51,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The project does not seed demo claims. In local development, claims are stored by the Next.js server in `data/claims.json`, so every browser connected to the same local server sees the same feed and claim details. Browser local storage is retained as an offline fallback.
+Open `http://localhost:3000`. The project does not seed demo claims. In local development, claims are stored by the Next.js server in `data/claims.json`, so every browser connected to the same local server sees the same feed and claim details. Browser local storage is retained as an offline fallback. Set `CLAIMS_DATA_DIR` to store the file elsewhere.
 
 ### Environment Variables
 
@@ -83,6 +83,7 @@ The production build must pass before deployment. Playwright may require its bro
 3. Leave the framework as **Next.js** and use `npm run build` as the build command.
 4. Add any required variables from `.env.example` under **Project Settings > Environment Variables**.
 5. Deploy. Vercel will use `vercel.json` for the build settings and security headers.
+6. **Shared storage on Vercel:** claims are stored in `data/claims.json`, which is ephemeral on Vercel's serverless filesystem. For persistence across deployments, attach a Vercel Blob store or point `CLAIMS_DATA_DIR` at a mounted volume; otherwise the queue resets on each deployment. Local development keeps the file on disk automatically.
 
 Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel or expose it to the browser.
 

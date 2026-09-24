@@ -30,7 +30,10 @@ await page.waitForTimeout(600);
 await page.locator('button[type="submit"]').click();
 await page.waitForTimeout(400);
 const body1 = await page.locator("body").innerText();
-assert(body1.includes("Claim text is required."), "validation: claim text required error shown");
+assert(
+  body1.includes("Claim text must be at least 10 characters."),
+  "validation: claim text required error shown"
+);
 assert(
   body1.includes("Platform is required"),
   "validation: platform required error shown"

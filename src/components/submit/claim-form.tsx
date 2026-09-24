@@ -295,8 +295,7 @@ export function ClaimForm() {
           Claim saved to the local queue
         </h2>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-emerald-800/80">
-          Stored on this device only until a shared database is connected.
-          Status: <strong>Unverified</strong>. The automated evidence desk is
+          Stored on the shared public queue — visible to everyone. Status: <strong>Unverified</strong>. The automated evidence desk is
           gathering references — it will not change this status. Flags below
           are triage signals — not truth judgments.
         </p>
@@ -489,8 +488,8 @@ export function ClaimForm() {
 
       <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs leading-relaxed text-muted-foreground">
-          Claim text, platform, and category are required. Saved submissions
-          stay on this device until Supabase is connected.
+          Claim text, platform, and category are required. Submissions join
+          the shared public queue so every visitor sees the same claims.
         </p>
         <Button
           type="submit"

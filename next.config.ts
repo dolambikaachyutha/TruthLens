@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // ── Turbopack ─────────────────────────────────────────────────────────────
+  // Pin the workspace root so Turbopack never scans (or warns about) files
+  // outside this repository — e.g. a stray package-lock.json in a parent dir.
+  turbopack: {
+    root: process.cwd(),
+  },
   // ── Security ──────────────────────────────────────────────────────────────
   // These headers are also set in vercel.json for Vercel deployments.
   // They apply here for any non-Vercel Node hosting.

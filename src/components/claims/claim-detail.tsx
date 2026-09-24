@@ -115,8 +115,8 @@ export function ClaimDetail({ id }: { id: string }) {
     return (
       <div className="container-page py-10 sm:py-14">
         <ErrorState
-          title="Claim not found in this browser"
-          description="This claim was submitted in a different browser or the local queue was cleared. Claims are stored on this device until a shared database is connected."
+          title="Claim not found"
+          description="This claim may have been removed from the public feed, or the shared store is not reachable right now."
           onRetry={() => window.location.reload()}
         />
         <div className="mt-4 text-center">
