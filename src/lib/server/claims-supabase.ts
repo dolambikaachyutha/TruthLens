@@ -10,10 +10,6 @@ export function isSupabaseClaimsConfigured(): boolean {
   return Boolean(supabaseUrl && supabasePublishableKey);
 }
 
-function restUrl(): string {
-  return `${supabaseUrl}/rest/v1/claims`;
-}
-
 function headers(prefer?: string): HeadersInit {
   return {
     apikey: supabasePublishableKey ?? "",
@@ -21,6 +17,45 @@ function headers(prefer?: string): HeadersInit {
     "Content-Type": "application/json",
     ...(prefer ? { Prefer: prefer } : {}),
   };
+}
+
+/**
+ * The canonical table is `public.claims` (see supabase/schema.sql). Until
+ * that table has been migrated with its `payload` column, the store falls
+ * back to `public.truthlens_claims`, which holds the same claim payloads.
+ * The table is re-checked every minute so running schema.sql upgrades the
+ * app automatically — no redeploy required.
+ */
+type ClaimsTable = "claims" | "truthlens_claims";
+
+const TABLE_RECHECK_MS = 60_000;
+let tableState: { table: ClaimsTable; checkedAt: number } | null = null;
+
+function restUrlFor(table: ClaimsTable): string {
+  return `${supabaseUrl}/rest/v1/${table}`;
+}
+
+function invalidateTable(): void {
+  tableState = null;
+}
+
+async function resolveTable(): Promise<ClaimsTable> {
+  const now = Date.now();
+  if (tableState && now - tableState.checkedAt < TABLE_RECHECK_MS) {
+    return tableState.table;
+  }
+  let table: ClaimsTable = "claims";
+  try {
+    const response = await fetch(
+      `${restUrlFor("claims")}?select=payload&limit=1`,
+      { headers: headers(), cache: "no-store" }
+    );
+    if (!response.ok) table = "truthlens_claims";
+  } catch {
+    table = "truthlens_claims";
+  }
+  tableState = { table, checkedAt: now };
+  return table;
 }
 
 /**
@@ -128,8 +163,9 @@ export function mergeClaimPayload(existing: Claim, incoming: Claim): Claim {
 async function readExistingPayloads(ids: string[]): Promise<Map<string, Claim>> {
   const map = new Map<string, Claim>();
   if (ids.length === 0) return map;
+  const table = await resolveTable();
   const query = `?id=in.(${ids.map((id) => encodeURIComponent(id)).join(",")})&select=payload`;
-  const response = await fetch(`${restUrl()}${query}`, {
+  const response = await fetch(`${restUrlFor(table)}${query}`, {
     headers: headers(),
     cache: "no-store",
   });
@@ -143,11 +179,56 @@ async function readExistingPayloads(ids: string[]): Promise<Map<string, Claim>> 
   return map;
 }
 
-export async function readSupabaseClaims(): Promise<Claim[]> {
-  const response = await fetch(`${restUrl()}?select=payload&order=submitted_at.desc`, {
-    headers: headers(),
+function toRow(table: ClaimsTable, claim: Claim): Record<string, unknown> {
+  const base = {
+    id: claim.id,
+    payload: claim,
+    submitted_at: claim.submittedAt,
+    updated_at: claim.updatedAt,
+  };
+  if (table === "truthlens_claims") return base;
+  return {
+    ...base,
+    text: claim.body,
+    platform: claim.platform ?? null,
+    category: claim.category,
+    source_url: claim.sourceUrl,
+    status: claim.claimStatus,
+    intake_status: claim.intakeStatus,
+    automation_status: claim.automationStatus,
+    risk_level: claim.riskLevel,
+    automated_evidence_count: claim.automatedEvidenceCount,
+    submitted_session_id: claim.submittedSessionId ?? null,
+    intake_completed_at: claim.intakeCompletedAt,
+    intake_error: claim.intakeError,
+    is_visible_in_under_review: claim.isVisibleInUnderReview,
+    is_visible_in_reviewed_feed: claim.isVisibleInReviewedFeed,
+    is_deleted: claim.isDeleted === true,
+  };
+}
+
+async function postRows(
+  table: ClaimsTable,
+  rows: Record<string, unknown>[]
+): Promise<void> {
+  const response = await fetch(restUrlFor(table), {
+    method: "POST",
+    headers: headers("resolution=merge-duplicates,return=minimal"),
+    body: JSON.stringify(rows),
     cache: "no-store",
   });
+  if (!response.ok) throw new Error(`Supabase write failed: ${response.status}`);
+}
+
+export async function readSupabaseClaims(): Promise<Claim[]> {
+  const table = await resolveTable();
+  const response = await fetch(
+    `${restUrlFor(table)}?select=payload&order=submitted_at.desc`,
+    {
+      headers: headers(),
+      cache: "no-store",
+    }
+  );
   if (!response.ok) throw new Error(`Supabase read failed: ${response.status}`);
   const rows = (await response.json()) as { payload: Claim }[];
   return rows
@@ -162,39 +243,25 @@ export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {
   if (valid.length === 0) return [];
 
   return withLock(async () => {
+    const table = await resolveTable();
     const existing = await readExistingPayloads(valid.map((claim) => claim.id));
     const merged = valid.map((claim) => {
       const stored = existing.get(claim.id);
       return stored ? mergeClaimPayload(stored, claim) : claim;
     });
-    const rows = merged.map((claim) => ({
-      id: claim.id,
-      text: claim.body,
-      platform: claim.platform ?? null,
-      category: claim.category,
-      source_url: claim.sourceUrl,
-      status: claim.claimStatus,
-      intake_status: claim.intakeStatus,
-      automation_status: claim.automationStatus,
-      risk_level: claim.riskLevel,
-      automated_evidence_count: claim.automatedEvidenceCount,
-      submitted_session_id: claim.submittedSessionId ?? null,
-      intake_completed_at: claim.intakeCompletedAt,
-      intake_error: claim.intakeError,
-      is_visible_in_under_review: claim.isVisibleInUnderReview,
-      is_visible_in_reviewed_feed: claim.isVisibleInReviewedFeed,
-      is_deleted: claim.isDeleted === true,
-      payload: claim,
-      submitted_at: claim.submittedAt,
-      updated_at: claim.updatedAt,
-    }));
-    const response = await fetch(restUrl(), {
-      method: "POST",
-      headers: headers("resolution=merge-duplicates,return=minimal"),
-      body: JSON.stringify(rows),
-      cache: "no-store",
-    });
-    if (!response.ok) throw new Error(`Supabase write failed: ${response.status}`);
+    const rows = merged.map((claim) => toRow(table, claim));
+    try {
+      await postRows(table, rows);
+    } catch (error) {
+      // If the canonical table is not migrated yet (or just changed), fall
+      // back to the legacy payload table and re-check on the next request.
+      if (table === "claims") {
+        invalidateTable();
+        await postRows("truthlens_claims", merged.map((c) => toRow("truthlens_claims", c)));
+      } else {
+        throw error;
+      }
+    }
     return merged;
   });
 }

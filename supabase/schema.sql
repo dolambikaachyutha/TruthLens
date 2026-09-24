@@ -40,6 +40,18 @@ create table if not exists public.claims (
 alter table public.claims add column if not exists is_deleted boolean not null default false;
 alter table public.claims add column if not exists payload jsonb not null default '{}'::jsonb;
 
+-- Carry existing shared claims into the canonical table (idempotent) so a
+-- database that predates the payload column keeps its feed history.
+insert into public.claims (id, payload, submitted_at, updated_at)
+select t.id, t.payload, t.submitted_at, t.updated_at
+from public.truthlens_claims t
+on conflict (id) do nothing;
+
+update public.claims c
+set is_deleted = true
+where c.payload->>'isDeleted' = 'true'
+  and c.is_deleted = false;
+
 -- ─── RISK_FLAGS ───────────────────────────────────────────────────────
 create table if not exists public.risk_flags (
   id text primary key,
