@@ -1,8 +1,7 @@
 /**
  * Local persistence adapter.
  *
- * The shared claims API uses Supabase when configured and data/claims.json
- * during local development without Supabase credentials.
+ * The shared claims API uses Supabase as the only canonical data source.
  *
  * When a real database is needed in the future:
  *   - Replace the functions below with API calls.
@@ -13,7 +12,7 @@
  */
 
 export const LOCAL_STORE_VERSION = "v1";
-export const LOCAL_STORE_LABEL = "Shared claims store";
+export const LOCAL_STORE_LABEL = "Shared Supabase store";
 
 export function isSupabaseConfigured(): boolean {
   return Boolean(
@@ -24,7 +23,5 @@ export function isSupabaseConfigured(): boolean {
 
 /** Returns a human-readable label for the current data source. */
 export function dataSourceLabel(): string {
-  return isSupabaseConfigured()
-    ? "Shared through Supabase"
-    : "Shared by this local server";
+  return "Shared through Supabase";
 }

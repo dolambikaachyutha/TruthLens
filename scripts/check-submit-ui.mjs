@@ -81,17 +81,21 @@ await page.locator('button[type="submit"]').click();
 await page.waitForTimeout(1500);
 const successBody = await page.locator("body").innerText();
 assert(
-  successBody.includes("Claim saved to the local queue"),
+  successBody.includes("Claim submitted to the shared feed"),
   "success state after submit"
 );
 assert(successBody.includes("Sensational language"), "success panel shows Sensational language");
 assert(successBody.includes("Shouting"), "success panel shows Shouting");
 assert(successBody.includes("Unsourced"), "success panel shows Unsourced");
 assert(successBody.toLowerCase().includes("high risk"), "success panel shows High risk");
-const stored = await page.evaluate(() =>
-  window.localStorage.getItem("vq.submissions.v1")
+const stored = await page.evaluate(async () => {
+  const response = await fetch("/api/claims", { cache: "no-store" });
+  return response.json();
+});
+assert(
+  stored.some((claim) => claim.body.includes("BREAKING SHOCKING")),
+  "shared API stored the record"
 );
-assert(Boolean(stored && stored.includes("BREAKING SHOCKING")), "mock persistence stored the record");
 await page.screenshot({ path: path.join(shots, "d-success.png"), fullPage: false });
 
 console.log("SHOTS_DIR=" + shots);

@@ -78,10 +78,9 @@ async function waitForAutomationComplete(timeout = 25000) {
 }
 
 async function getStoredClaim() {
-  return page.evaluate(() => {
-    const raw = window.localStorage.getItem("vq.claims.v1");
-    if (!raw) return null;
-    const list = JSON.parse(raw);
+  return page.evaluate(async () => {
+    const response = await fetch("/api/claims", { cache: "no-store" });
+    const list = await response.json();
     return list[0] ?? null;
   });
 }
@@ -89,7 +88,7 @@ async function getStoredClaim() {
 // ─── Case 1: no source URL ───────────────────────────────────────────
 console.log("── Case 1: no source URL");
 await page.goto(base, { waitUntil: "load" });
-await page.evaluate(() => window.localStorage.clear());
+await page.evaluate(() => window.localStorage.removeItem("vq.session.id"));
 await submitClaim({
   text: "City council secretly voted to raise taxes by 40 percent with no public notice.",
 });
@@ -309,9 +308,8 @@ async function waitForAutomationIdle(timeout = 40000) {
   await page
     .waitForFunction(
       () => {
-        const raw = window.localStorage.getItem("vq.claims.v1");
-        if (!raw) return true;
-        const list = JSON.parse(raw);
+        const response = await fetch("/api/claims", { cache: "no-store" });
+        const list = await response.json();
         return list.every(
           (c) =>
             c.automationStatus !== "queued" &&
@@ -389,9 +387,9 @@ async function publishOnClaim(verdictTestId, expectedStatus, caseLabel) {
   await page.locator('[data-testid="checklist-date"]').uncheck();
   await page.locator(`[data-testid="${verdictTestId}"]`).click();
   await page.waitForTimeout(250);
-  const blocked = await page.evaluate((id) => {
-    const raw = window.localStorage.getItem("vq.claims.v1");
-    const list = raw ? JSON.parse(raw) : [];
+  const blocked = await page.evaluate(async (id) => {
+    const response = await fetch("/api/claims", { cache: "no-store" });
+    const list = await response.json();
     return list.find((c) => c.id === id);
   }, selectedId);
   assert(
@@ -412,9 +410,9 @@ async function publishOnClaim(verdictTestId, expectedStatus, caseLabel) {
   await page.waitForTimeout(300);
   await page.locator(`[data-testid="${verdictTestId}"]`).click();
   await page.waitForFunction(
-    (id) => {
-      const raw = window.localStorage.getItem("vq.claims.v1");
-      const list = raw ? JSON.parse(raw) : [];
+    async (id) => {
+      const response = await fetch("/api/claims", { cache: "no-store" });
+      const list = await response.json();
       const claim = list.find((c) => c.id === id);
       return Boolean(claim?.publishedReview);
     },
@@ -424,9 +422,9 @@ async function publishOnClaim(verdictTestId, expectedStatus, caseLabel) {
   await page.waitForTimeout(400);
   await shot(`${caseLabel}-published`);
 
-  const stored = await page.evaluate(() => {
-    const raw = window.localStorage.getItem("vq.claims.v1");
-    return raw ? JSON.parse(raw) : [];
+  const stored = await page.evaluate(async () => {
+    const response = await fetch("/api/claims", { cache: "no-store" });
+    return response.json();
   });
   const published = stored.find((c) => c.id === selectedId);
   assert(Boolean(published), `${caseLabel}: selected claim still in store`);
@@ -471,9 +469,9 @@ async function publishOnClaim(verdictTestId, expectedStatus, caseLabel) {
 
   // Give any in-flight automation a moment to attempt an overwrite, then re-check.
   await page.waitForTimeout(1200);
-  const stored2 = await page.evaluate(() => {
-    const raw = window.localStorage.getItem("vq.claims.v1");
-    return raw ? JSON.parse(raw) : [];
+  const stored2 = await page.evaluate(async () => {
+    const response = await fetch("/api/claims", { cache: "no-store" });
+    return response.json();
   });
   const after = stored2.find((c) => c.id === selectedId);
   assert(

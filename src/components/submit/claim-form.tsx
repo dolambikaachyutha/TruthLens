@@ -25,9 +25,8 @@ import { CATEGORY_OPTIONS, RISK_LEVEL_META } from "@/lib/meta";
 import { PLATFORM_OPTIONS, PLATFORM_PLACEHOLDER } from "@/lib/platform-meta";
 import { analyzeClaim } from "@/lib/risk-analysis";
 import { createClaim, findSimilarForVote, saveClaim, voteSameClaim } from "@/lib/claim-store";
-import { saveSubmission } from "@/lib/mock-submissions";
 import { claimFormSchema, type ClaimFormValues } from "@/lib/validation";
-import type { Claim, ClaimCategory, Platform, RiskFlag, RiskLevel } from "@/lib/types";
+import type { Claim, ClaimCategory, RiskFlag, RiskLevel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const CATEGORY_ITEMS = CATEGORY_OPTIONS.filter((option) => option.value !== "all");
@@ -89,13 +88,6 @@ export function ClaimForm() {
     const analysis = analyzeClaim(values);
     const sourceUrl = values.sourceUrl.trim() === "" ? null : values.sourceUrl.trim();
 
-    saveSubmission({
-      claimText: values.claimText,
-      platform: values.platform as Platform,
-      category: values.category as ClaimCategory,
-      sourceUrl,
-    });
-
     const claim = createClaim({
       claimText: values.claimText,
       category: values.category as ClaimCategory,
@@ -115,7 +107,7 @@ export function ClaimForm() {
     setPendingValues(null);
     setVotedMatchId(null);
 
-    toast.success("Claim saved to the local queue.", {
+    toast.success("Claim submitted to the shared feed.", {
       description: `${analysis.flags.length} triage signal${
         analysis.flags.length === 1 ? "" : "s"
       } · ${RISK_LEVEL_META[analysis.riskLevel].label} · status Unverified`,
@@ -292,7 +284,7 @@ export function ClaimForm() {
           <CircleCheckIcon aria-hidden className="size-6" />
         </div>
         <h2 className="mt-4 font-heading text-xl font-normal text-emerald-900">
-          Claim saved to the local queue
+          Claim submitted to the shared feed
         </h2>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-emerald-800/80">
           Stored on the shared public queue — visible to everyone. Status: <strong>Unverified</strong>. The automated evidence desk is

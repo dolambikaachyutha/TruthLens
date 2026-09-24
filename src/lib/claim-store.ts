@@ -11,8 +11,6 @@ import type {
   RiskLevel,
 } from "@/lib/types";
 
-export const CLAIMS_STORAGE_KEY = "vq.claims.v1";
-
 const EMPTY_CLAIMS: Claim[] = [];
 
 function hasStorage(): boolean {
@@ -121,97 +119,8 @@ export function hydrateClaims(claims: Claim[]): void {
     .filter((claim) => claim && typeof claim.id === "string")
     .map((claim) => migrateClaim(claim))
     .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-  writeAll(normalized);
+  cache = normalized;
   notify(normalized);
-}
-
-function readLocalClaims(): Claim[] {
-  if (!hasStorage()) return [];
-  try {
-    const raw = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return (parsed as (Partial<Claim> & { id: string })[])
-      .filter((item) => item && typeof item.id === "string")
-      .map(migrateClaim);
-  } catch {
-    return [];
-  }
-}
-
-function mergeSharedClaims(server: Claim[], local: Claim[]): Claim[] {
-  const byId = new Map<string, Claim>();
-  for (const claim of server) byId.set(claim.id, migrateClaim(claim));
-  for (const claim of local) {
-    const existing = byId.get(claim.id);
-    if (!existing) {
-      byId.set(claim.id, claim);
-      continue;
-    }
-    const existingTime =
-      Date.parse(existing.updatedAt || existing.submittedAt) || 0;
-    const localTime = Date.parse(claim.updatedAt || claim.submittedAt) || 0;
-    const base = localTime > existingTime ? claim : existing;
-    const other = base === claim ? existing : claim;
-    byId.set(claim.id, {
-      ...other,
-      ...base,
-      body: existing.body,
-      title: existing.title,
-      submittedAt:
-        Date.parse(existing.submittedAt) <= Date.parse(claim.submittedAt)
-          ? existing.submittedAt
-          : claim.submittedAt,
-      evidence: [
-        ...new Map(
-          [...(existing.evidence ?? []), ...(claim.evidence ?? [])].map(
-            (item) => [item.id, item] as const
-          )
-        ).values(),
-      ],
-      reviewHistory: [
-        ...new Map(
-          [...(existing.reviewHistory ?? []), ...(claim.reviewHistory ?? [])].map(
-            (item) => [item.id, item] as const
-          )
-        ).values(),
-      ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-      communityReviews: [
-        ...new Map(
-          [
-            ...(existing.communityReviews ?? []),
-            ...(claim.communityReviews ?? []),
-          ].map((item) => [item.id, item] as const)
-        ).values(),
-      ].sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-      sameClaimVoterIds: [
-        ...new Set([
-          ...(existing.sameClaimVoterIds ?? []),
-          ...(claim.sameClaimVoterIds ?? []),
-        ]),
-      ],
-      sameClaimCount: Math.max(
-        existing.sameClaimCount ?? 0,
-        claim.sameClaimCount ?? 0
-      ),
-      publishedReview: existing.publishedReview ?? claim.publishedReview ?? null,
-      humanReview: existing.humanReview ?? claim.humanReview ?? null,
-      isDeleted: existing.isDeleted === true || claim.isDeleted === true,
-      deletedAt: existing.deletedAt ?? claim.deletedAt ?? null,
-      deletedReason: existing.deletedReason ?? claim.deletedReason ?? null,
-      deletedReasonDetail:
-        existing.deletedReasonDetail ?? claim.deletedReasonDetail ?? null,
-      deletedBy: existing.deletedBy ?? claim.deletedBy ?? null,
-      updatedAt:
-        localTime >= existingTime
-          ? (claim.updatedAt ?? existing.updatedAt)
-          : (existing.updatedAt ?? claim.updatedAt),
-    });
-  }
-  return [...byId.values()].sort((a, b) =>
-    b.submittedAt.localeCompare(a.submittedAt)
-  );
 }
 
 async function syncClaimToServer(claim: Claim): Promise<void> {
@@ -223,24 +132,9 @@ async function syncClaimToServer(claim: Claim): Promise<void> {
       body: JSON.stringify(claim),
       cache: "no-store",
     });
+    await refreshSharedClaims();
   } catch {
-    // Keep the local copy available when the local server is offline.
-  }
-}
-
-async function pushLocalOnlyToServer(local: Claim[], server: Claim[]): Promise<void> {
-  const serverIds = new Set(server.map((claim) => claim.id));
-  const missing = local.filter((claim) => !serverIds.has(claim.id));
-  if (missing.length === 0) return;
-  try {
-    await fetch("/api/claims", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(missing),
-      cache: "no-store",
-    });
-  } catch {
-    // Offline: local cache still works.
+    // The next scheduled refresh will reconcile the memory cache.
   }
 }
 
@@ -256,27 +150,12 @@ async function fetchSharedClaims(): Promise<Claim[] | null> {
   }
 }
 
-/**
- * Load claims from the shared local server, merge any browser-only claims,
- * push missing local claims up, then hydrate the client cache.
- */
+/** Load the canonical claims list from Supabase through the server API. */
 export function bootstrapSharedClaims(): Promise<void> {
   if (bootstrapPromise) return bootstrapPromise;
   bootstrapPromise = (async () => {
-    const local = readLocalClaims();
     const server = await fetchSharedClaims();
-    if (!server) {
-      if (local.length > 0) {
-        writeAll(local.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)));
-        notify(listClaims());
-      }
-      return;
-    }
-    await pushLocalOnlyToServer(local, server);
-    const refreshed = (await fetchSharedClaims()) ?? server;
-    const merged = mergeSharedClaims(refreshed, local);
-    writeAll(merged);
-    notify(merged);
+    if (server) hydrateClaims(server);
   })().finally(() => {
     bootstrapPromise = null;
   });
@@ -288,12 +167,7 @@ export function refreshSharedClaims(): Promise<void> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     const server = await fetchSharedClaims();
-    if (!server) return;
-    const local = readLocalClaims();
-    const merged = mergeSharedClaims(server, local);
-    writeAll(merged);
-    notify(merged);
-    await pushLocalOnlyToServer(local, server);
+    if (server) hydrateClaims(server);
   })()
     .catch(() => undefined)
     .finally(() => {
@@ -303,41 +177,7 @@ export function refreshSharedClaims(): Promise<void> {
 }
 
 function readAll(): Claim[] {
-  if (cache) return cache;
-  if (!hasStorage()) {
-    cache = EMPTY_CLAIMS;
-    return cache;
-  }
-  try {
-    const raw = window.localStorage.getItem(CLAIMS_STORAGE_KEY);
-    if (!raw) {
-      cache = EMPTY_CLAIMS;
-      return cache;
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      cache = EMPTY_CLAIMS;
-      return cache;
-    }
-    cache = (parsed as (Partial<Claim> & { id: string })[])
-      .filter((item) => item && typeof item.id === "string")
-      .map(migrateClaim)
-      .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-    return cache;
-  } catch {
-    cache = EMPTY_CLAIMS;
-    return cache;
-  }
-}
-
-function writeAll(claims: Claim[]): void {
-  cache = claims;
-  if (!hasStorage()) return;
-  try {
-    window.localStorage.setItem(CLAIMS_STORAGE_KEY, JSON.stringify(claims));
-  } catch {
-    /* storage full or unavailable */
-  }
+  return cache ?? EMPTY_CLAIMS;
 }
 
 type Listener = (claims: Claim[]) => void;
@@ -370,7 +210,7 @@ export function saveClaim(claim: Claim): Claim {
     claims.unshift(claim);
   }
   claims.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-  writeAll(claims);
+  cache = claims;
   notify(claims);
   void syncClaimToServer(claim);
   return claim;
@@ -394,7 +234,7 @@ export function updateClaim(
   };
   claims[index] = next;
   claims.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-  writeAll(claims);
+  cache = claims;
   notify(claims);
   void syncClaimToServer(next);
   return next;

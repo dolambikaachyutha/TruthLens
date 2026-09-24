@@ -37,8 +37,7 @@ TruthLens is a public civic-tech platform for triaging potentially misleading cl
 - Tailwind CSS v4 and shadcn/ui components
 - React Hook Form and Zod validation
 - Motion for React animations
-- Shared claim storage on the local Next.js server (`/api/claims` → `data/claims.json`)
-- Supabase integration is optional
+- Shared claim storage through Supabase (`truthlens_claims` via `/api/claims`)
 - Sonner notifications
 - Playwright end-to-end tests
 
@@ -51,7 +50,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. The project does not seed demo claims. In local development, claims are stored by the Next.js server in `data/claims.json`, so every browser connected to the same local server sees the same feed and claim details. Browser local storage is retained as an offline fallback. Set `CLAIMS_DATA_DIR` to store the file elsewhere.
+Open `http://localhost:3000`. The project does not seed demo claims. The public feed is shared across visitors through Supabase. Browser localStorage is not the source of truth; it is used only for demo session identification and temporary UI state.
 
 ### Environment Variables
 
@@ -64,7 +63,7 @@ GOOGLE_FACTCHECK_API_KEY=
 FACTCHECK_API_URL=
 ```
 
-For a deployed shared feed, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `truthlens_claims` table and reads them through the Next.js API. Never add `.env.local` or service-role keys to Git. Only the public anon key may be used by the client.
+For a shared feed, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `truthlens_claims` table and reads them through the Next.js API. Never add `.env.local` or service-role keys to Git. Only the public anon key may be used by the client.
 
 ## Validation
 
@@ -82,7 +81,7 @@ The production build must pass before deployment. Playwright may require its bro
 2. In Vercel, select **Add New Project** and import the GitHub repository.
 3. Leave the framework as **Next.js** and use `npm run build` as the build command.
 4. Add any required variables from `.env.example` under **Project Settings > Environment Variables**.
-5. Deploy. Vercel will use `vercel.json` for the build settings and security headers.
+5. Deploy. Vercel will use `vercel.json` for the build settings and security headers. The public feed is shared across visitors through Supabase. Browser localStorage is not the source of truth; it is used only for demo session identification and temporary UI state.
 6. **Shared storage on Vercel:** run `supabase/schema.sql` and set both Supabase environment variables before deploying. Vercel then uses the persistent `truthlens_claims` table for the shared feed. Without those variables, the local file fallback is not suitable for production persistence.
 
 Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel or expose it to the browser.

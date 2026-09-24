@@ -559,23 +559,22 @@ UI shortcuts never auto-label a claim true or false.
 
 ### Decision
 
-Claims are stored on the Next.js local server at `data/claims.json` through
-the public `/api/claims` routes. Every browser connected to the same server
-sees the same feed and claim details.
+Supabase is the only source of truth for claims, feed visibility, statuses,
+reviews, evidence, support counts, and timestamps. The public `/api/claims`
+route reads and writes the `truthlens_claims` table. Every browser refreshes
+from that same database-backed list.
 
 - `GET /api/claims` returns the shared claim list.
 - `POST /api/claims` upserts one claim or a batch of claims.
-- The client bootstraps from the server, merges any browser-only offline
-  cache, and pushes missing local claims up so prior localStorage data is
-  migrated onto the shared server.
-- Updates (status, reviews, votes, deletes, evidence) write through to the
-  server; the client refreshes on an interval and on window focus.
-- Original claim text is never rewritten by the merge; array fields
-  (history, evidence, community reviews) are unioned by id.
+- The client keeps only an in-memory rendering cache; it never stores claims
+        in browser storage or merges browser-only claims into the feed.
+- Updates (status, reviews, votes, deletes, evidence) write through to
+        Supabase; the client refreshes after mutations, on focus, and every five
+        seconds.
+- Original claim text is never rewritten by client mutation helpers.
 
 ### Rationale
 
 A single shared queue is required so the public feed is visible to everyone,
-not only the browser that submitted a claim. A file-backed store inside the
-same Next.js Node service keeps the deployment as one web service (no separate
-Express backend) and needs no authentication or external secrets.
+not only the browser that submitted a claim. Supabase provides durable shared
+storage while the Next.js API remains the single application backend.

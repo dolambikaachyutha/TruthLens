@@ -297,7 +297,7 @@ export function duplicateClaimsJob(
       kind: "duplicate_claims",
       title: "Duplicate claims",
       status: "ok",
-      summary: "No duplicate claims detected in the local queue.",
+      summary: "No duplicate claims detected in the shared claims feed.",
     };
   }
   return {

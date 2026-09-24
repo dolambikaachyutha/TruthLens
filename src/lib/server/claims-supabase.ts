@@ -27,7 +27,9 @@ export async function readSupabaseClaims(): Promise<Claim[]> {
   });
   if (!response.ok) throw new Error(`Supabase read failed: ${response.status}`);
   const rows = (await response.json()) as { payload: Claim }[];
-  return rows.map((row) => row.payload);
+  return rows
+    .map((row) => row.payload)
+    .filter((claim) => claim && claim.isDeleted !== true);
 }
 
 export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {

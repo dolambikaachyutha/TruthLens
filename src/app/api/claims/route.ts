@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { readClaims, upsertClaim, upsertMany } from "@/lib/server/claims-fs";
 import {
   isSupabaseClaimsConfigured,
   readSupabaseClaims,
@@ -13,10 +12,14 @@ export const dynamic = "force-dynamic";
 const noStore = { "Cache-Control": "no-store" };
 
 export async function GET() {
+  if (!isSupabaseClaimsConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase is required for the shared claims feed." },
+      { status: 503, headers: noStore }
+    );
+  }
   try {
-    const claims = isSupabaseClaimsConfigured()
-      ? await readSupabaseClaims()
-      : await readClaims();
+    const claims = await readSupabaseClaims();
     return NextResponse.json(claims, { headers: noStore });
   } catch {
     return NextResponse.json(
@@ -27,6 +30,12 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isSupabaseClaimsConfigured()) {
+    return NextResponse.json(
+      { error: "Supabase is required for the shared claims feed." },
+      { status: 503, headers: noStore }
+    );
+  }
   let body: unknown;
   try {
     body = await request.json();
@@ -43,9 +52,7 @@ export async function POST(request: Request) {
         Boolean(item) && typeof (item as Claim).id === "string"
     );
     try {
-      const saved = isSupabaseClaimsConfigured()
-        ? await upsertSupabaseClaims(claims)
-        : await upsertMany(claims);
+      const saved = await upsertSupabaseClaims(claims);
       return NextResponse.json(saved, { headers: noStore });
     } catch {
       return NextResponse.json(
@@ -64,9 +71,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const saved = isSupabaseClaimsConfigured()
-      ? await upsertSupabaseClaims([incoming])
-      : [await upsertClaim(incoming)];
+    const saved = await upsertSupabaseClaims([incoming]);
     return NextResponse.json(saved[0], { headers: noStore });
   } catch {
     return NextResponse.json(

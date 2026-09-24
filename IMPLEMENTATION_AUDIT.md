@@ -5,7 +5,7 @@
 - No-auth public pages: `/`, `/submit`, `/feed`, `/claims/[id]`, `/review`, `/methodology`
 - Claim submission form (Zod + React Hook Form) with live presentation-signal analysis
 - Risk flags: sensational language, shouting (>50% uppercase), unsourced; risk levels low/medium/high
-- Local claim store (`src/lib/claim-store.ts`, localStorage `vq.claims.v1`) with `useSyncExternalStore` hooks
+- Supabase-backed claim store through `/api/claims`, with an in-memory `useSyncExternalStore` rendering cache
 - Automated evidence desk: `POST /api/evidence` — presentation signals, source reachability, source metadata, Wayback archive, optional fact-check search, similar claims
 - Automation never mutates `claimStatus` (verified by unit + browser tests)
 - Human review workspace `/review`: start review → note (≥20 chars) + ≥1 http(s) evidence URL → publish Verified True / Verified False / Misleading
@@ -71,7 +71,7 @@
 ## Risks discovered
 
 - Existing browser tests assert `automationStatus === "complete"` and publish with only note+URL; must update tests when statuses and publish requirements expand (spec requires analysis fields + strength + confidence + quality checklist).
-- localStorage claims written with legacy statuses need a read-time migration or UI/meta will break (`Record<AutomationStatus, …>`).
+- Legacy browser claim storage has been removed; localStorage is limited to the demo session identifier and UI state.
 - Feed visibility gates must not hide claims after automation completes or case-10 / feed tests fail.
 - SSRF rules on source-check must block localhost/private IPs without breaking `example.com` tests.
 - No Supabase credentials in `.env.local`; integration must be optional and clearly labeled — never silent fake data in production.
@@ -84,4 +84,4 @@
 - `FACTCHECK_API_URL` continues to work as an optional alternate endpoint.
 - Quality checklist = date, location, and scope confirmed by the reviewer.
 - Spam/abuse/PII check is a conservative content heuristic (blocks only clearly abusive patterns), not an auto-verdict.
-- Local development fallback = localStorage mirror of the shared server store (`/api/claims` → `data/claims.json`); UI copy reflects the shared queue. Optional Supabase integration can replace the file store later.
+- Supabase is required for the shared claims API; no filesystem or browser claim fallback exists.

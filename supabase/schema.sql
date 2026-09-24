@@ -18,8 +18,13 @@ create index if not exists truthlens_claims_submitted_idx
 
 alter table public.truthlens_claims enable row level security;
 
+drop policy if exists "public read TruthLens claims" on public.truthlens_claims;
+drop policy if exists "public insert TruthLens claims" on public.truthlens_claims;
+drop policy if exists "public update TruthLens claims" on public.truthlens_claims;
+
 create policy "public read TruthLens claims"
-  on public.truthlens_claims for select using (true);
+  on public.truthlens_claims for select
+  using ((payload->>'isDeleted') is distinct from 'true');
 create policy "public insert TruthLens claims"
   on public.truthlens_claims for insert with check (true);
 create policy "public update TruthLens claims"
