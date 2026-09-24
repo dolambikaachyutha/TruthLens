@@ -1,3 +1,4 @@
+HACKATHON_ID: AZIS-BZRR67
 For a deployed shared feed, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `public.claims` table and reads them through the Next.js API. The public feed is shared across visitors through Supabase. Browser localStorage is not the source of truth; it is used only for demo session identification and temporary UI state. Never add `.env.local` or service-role keys to Git. Only the public anon key may be used by the client.
 6. **Shared storage on Vercel:** run `supabase/schema.sql` and set both Supabase environment variables before deploying. Vercel then uses the persistent `public.claims` table for the shared feed.
 # TruthLens
