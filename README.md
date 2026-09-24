@@ -64,7 +64,7 @@ GOOGLE_FACTCHECK_API_KEY=
 FACTCHECK_API_URL=
 ```
 
-All variables are optional. Never add `.env.local` or service-role keys to Git. When using Supabase, apply `supabase/schema.sql` in the Supabase SQL editor. Only the public anon key may be used by the client.
+For a deployed shared feed, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `truthlens_claims` table and reads them through the Next.js API. Never add `.env.local` or service-role keys to Git. Only the public anon key may be used by the client.
 
 ## Validation
 
@@ -83,7 +83,7 @@ The production build must pass before deployment. Playwright may require its bro
 3. Leave the framework as **Next.js** and use `npm run build` as the build command.
 4. Add any required variables from `.env.example` under **Project Settings > Environment Variables**.
 5. Deploy. Vercel will use `vercel.json` for the build settings and security headers.
-6. **Shared storage on Vercel:** claims are stored in `data/claims.json`, which is ephemeral on Vercel's serverless filesystem. For persistence across deployments, attach a Vercel Blob store or point `CLAIMS_DATA_DIR` at a mounted volume; otherwise the queue resets on each deployment. Local development keeps the file on disk automatically.
+6. **Shared storage on Vercel:** run `supabase/schema.sql` and set both Supabase environment variables before deploying. Vercel then uses the persistent `truthlens_claims` table for the shared feed. Without those variables, the local file fallback is not suitable for production persistence.
 
 Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel or expose it to the browser.
 

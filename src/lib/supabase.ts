@@ -1,8 +1,8 @@
 /**
  * Local persistence adapter.
  *
- * The local development store uses a shared Next.js API backed by data/claims.json.
- * Browser localStorage remains an offline fallback.
+ * The shared claims API uses Supabase when configured and data/claims.json
+ * during local development without Supabase credentials.
  *
  * When a real database is needed in the future:
  *   - Replace the functions below with API calls.
@@ -13,14 +13,18 @@
  */
 
 export const LOCAL_STORE_VERSION = "v1";
-export const LOCAL_STORE_LABEL = "Device-local store";
+export const LOCAL_STORE_LABEL = "Shared claims store";
 
-/** Always false — Supabase is not used in this build. */
 export function isSupabaseConfigured(): boolean {
-  return false;
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
 }
 
 /** Returns a human-readable label for the current data source. */
 export function dataSourceLabel(): string {
-  return "Shared by this local server";
+  return isSupabaseConfigured()
+    ? "Shared through Supabase"
+    : "Shared by this local server";
 }

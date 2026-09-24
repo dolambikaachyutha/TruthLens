@@ -4,6 +4,27 @@
 
 create extension if not exists "pgcrypto";
 
+-- The application stores the complete Claim object in this JSONB payload so
+-- the public feed and reviewer workflow share one source of truth.
+create table if not exists public.truthlens_claims (
+  id text primary key,
+  payload jsonb not null,
+  submitted_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists truthlens_claims_submitted_idx
+  on public.truthlens_claims(submitted_at desc);
+
+alter table public.truthlens_claims enable row level security;
+
+create policy "public read TruthLens claims"
+  on public.truthlens_claims for select using (true);
+create policy "public insert TruthLens claims"
+  on public.truthlens_claims for insert with check (true);
+create policy "public update TruthLens claims"
+  on public.truthlens_claims for update using (true) with check (true);
+
 -- ─── CLAIMS ───────────────────────────────────────────────────────────
 create table if not exists public.claims (
   id text primary key,
