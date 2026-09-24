@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   isSupabaseClaimsConfigured,
+  isSupabaseMutationsConfigured,
   readSupabaseClaims,
   upsertSupabaseClaims,
 } from "@/lib/server/claims-supabase";
@@ -30,9 +31,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isSupabaseClaimsConfigured()) {
+  if (!isSupabaseClaimsConfigured() || !isSupabaseMutationsConfigured()) {
     return NextResponse.json(
-      { error: "Supabase is required for the shared claims feed." },
+      { error: "Supabase server mutation credentials are required." },
       { status: 503, headers: noStore }
     );
   }
