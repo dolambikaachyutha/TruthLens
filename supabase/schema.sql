@@ -7,7 +7,7 @@ create extension if not exists "pgcrypto";
 -- The application stores the complete Claim object in this JSONB payload so
 -- ─── CLAIMS ───────────────────────────────────────────────────────────
 create table if not exists public.claims (
-  id text primary key,
+  id text primary key default gen_random_uuid()::text,
   text text not null,
   platform text,
   category text not null,
