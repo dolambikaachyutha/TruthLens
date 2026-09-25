@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Trash2Icon, AlertTriangleIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "motion/react";
 import { deleteClaim } from "@/lib/claim-store";
 import { DELETE_REASON_LABELS } from "@/lib/meta";
 import { DELETE_REASONS, type DeleteReason } from "@/lib/types";
@@ -21,7 +19,6 @@ interface DeleteClaimButtonProps {
  * No edit path is exposed.
  */
 export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps) {
-  const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [reason, setReason] = useState<DeleteReason>("test_submission");
@@ -35,8 +32,6 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
     setDeleting(true);
     await new Promise((r) => setTimeout(r, 300));
     const ok = deleteClaim(claimId, { reason, reasonDetail });
-    setDeleting(false);
-    setConfirming(false);
     if (ok) {
       toast.success("Claim removed from the public feed", {
         description:
@@ -45,25 +40,26 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
       if (onDeleted) {
         onDeleted();
       } else {
-        router.push("/feed");
+        // The claim disappears from the shared read API immediately after deletion.
+        // A hard redirect avoids rendering the detail route after that removal.
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        window.location.assign("/feed");
       }
+      return;
     } else {
       toast.error("Could not delete this claim", {
         description: "Published claims cannot be deleted, or it is already gone.",
       });
     }
+    setDeleting(false);
+    setConfirming(false);
   }
 
   return (
     <div className="relative inline-block">
-      <AnimatePresence mode="wait">
+      <>
         {!confirming ? (
-          <motion.button
-            key="delete-btn"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+          <button
             type="button"
             onClick={() => setConfirming(true)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
@@ -72,14 +68,9 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
           >
             <Trash2Icon className="size-3.5" aria-hidden />
             Delete claim
-          </motion.button>
+          </button>
         ) : (
-          <motion.div
-            key="confirm-panel"
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ duration: 0.18 }}
+          <div
             className="flex w-full max-w-md flex-col gap-3 rounded-xl border border-red-300 bg-red-50 p-4"
             role="alertdialog"
             aria-label="Delete claim?"
@@ -158,9 +149,9 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
                 Cancel
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </div>
   );
 }

@@ -322,6 +322,7 @@ interface SupabaseClaimRow {
   automated_evidence_count?: number | null;
   submitted_at?: string | null;
   updated_at?: string | null;
+  version_number?: number | null;
   is_deleted?: boolean | null;
   payload?: Claim | null;
 }
@@ -385,7 +386,7 @@ export async function readSupabaseClaims(): Promise<Claim[]> {
   }
   try {
     const response = await fetch(
-      `${restUrl()}?select=id,text,category,platform,source_url,status,intake_status,automation_status,risk_level,automated_evidence_count,submitted_at,updated_at,is_deleted,payload&order=submitted_at.desc`,
+      `${restUrl()}?select=id,text,category,platform,source_url,status,intake_status,automation_status,risk_level,automated_evidence_count,submitted_at,updated_at,version_number,is_deleted,payload&order=submitted_at.desc`,
       {
         headers: headers(),
         cache: "no-store",

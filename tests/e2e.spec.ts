@@ -290,13 +290,19 @@ test.describe("Home page", () => {
     await page.waitForLoadState("domcontentloaded");
 
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    // The methodology CTA must be present in the primary navigation
-    // (the footer also links to /methodology — scope to avoid strict-mode hits)
-    await expect(
-      page
-        .getByRole("navigation", { name: "Primary" })
-        .getByRole("link", { name: /methodology/i })
-    ).toBeVisible();
+    const mobileMenu = page.getByRole("button", { name: /open navigation menu/i });
+    if (await mobileMenu.isVisible()) {
+      await mobileMenu.click();
+      await expect(
+        page.getByRole("navigation", { name: "Mobile" })
+          .getByRole("link", { name: /methodology/i })
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByRole("navigation", { name: "Primary" })
+          .getByRole("link", { name: /methodology/i })
+      ).toBeVisible();
+    }
   });
 
   test("Skip link is present for keyboard users", async ({ page }) => {

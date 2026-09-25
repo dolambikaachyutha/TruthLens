@@ -309,19 +309,6 @@ export function FeedBrowser() {
     );
   }
 
-  if (claims.length === 0) {
-    return (
-      <section aria-label="Claim feed">
-        <EmptyState
-          title="No claims yet"
-          description="The public queue is empty. Submit a claim to see its signals, reviewer notes, and full history here."
-          actionLabel="Submit a claim"
-          actionHref="/submit"
-        />
-      </section>
-    );
-  }
-
   const totalCount = reviewed.length + underReview.length + processing.length;
 
   return (
