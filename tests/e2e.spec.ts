@@ -81,8 +81,9 @@ test.describe("Risk analysis — AGENTS.md test case", () => {
     // Sensational language flag must appear
     await expect(panel.getByText(/sensational language/i)).toBeVisible();
 
-    // Shouting flag must appear (>50% uppercase)
-    await expect(panel.getByText(/shouting/i)).toBeVisible();
+    // Shouting flag must appear (>50% uppercase) — the panel also shows a
+    // "Shouting threshold" stat, so scope to the first match (the flag pill).
+    await expect(panel.getByText(/shouting/i).first()).toBeVisible();
 
     // Unsourced flag must appear (no source URL provided)
     await expect(panel.getByText(/unsourced/i)).toBeVisible();
@@ -189,8 +190,11 @@ test.describe("Submission — happy path", () => {
     // Success panel must appear
     await expect(page.getByTestId("submit-success")).toBeVisible({ timeout: 5000 });
 
-    // Success panel must show the High Risk badge
-    await expect(page.getByText(/high risk/i)).toBeVisible();
+    // Success panel must show the High Risk badge (scoped — the live risk
+    // panel also shows a "High risk" badge on the page behind the panel)
+    await expect(
+      page.getByTestId("submit-success").getByText(/high risk/i)
+    ).toBeVisible();
 
     // View claim link must be present
     await expect(page.getByTestId("view-claim")).toBeVisible();
@@ -286,8 +290,13 @@ test.describe("Home page", () => {
     await page.waitForLoadState("domcontentloaded");
 
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    // The methodology CTA must be present
-    await expect(page.getByRole("link", { name: /methodology/i })).toBeVisible();
+    // The methodology CTA must be present in the primary navigation
+    // (the footer also links to /methodology — scope to avoid strict-mode hits)
+    await expect(
+      page
+        .getByRole("navigation", { name: "Primary" })
+        .getByRole("link", { name: /methodology/i })
+    ).toBeVisible();
   });
 
   test("Skip link is present for keyboard users", async ({ page }) => {
@@ -304,7 +313,7 @@ test.describe("Methodology page", () => {
   test("Renders editorial principles and status glossary", async ({ page }) => {
     await page.goto(`${BASE_URL}/methodology`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByText(/presentation signals/i)).toBeVisible();
+    await expect(page.getByText(/signal catalog/i)).toBeVisible();
     await expect(page.getByText(/status glossary/i)).toBeVisible();
   });
 });

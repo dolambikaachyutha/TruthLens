@@ -32,7 +32,7 @@ TruthLens is a public civic-tech platform for triaging potentially misleading cl
 | `/claims/[id]` | View claim evidence and history |
 | `/review` | Review claims and record findings |
 | `/methodology` | Review standards and terminology |
-| `/api/claims` | Shared local-server claim store (`data/claims.json`) |
+| `/api/claims` | Shared Supabase-backed claims API |
 
 ## Technology
 
@@ -66,7 +66,7 @@ GOOGLE_FACTCHECK_API_KEY=
 FACTCHECK_API_URL=
 ```
 
-For a shared feed, set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `public.claims` table and reads them through the Next.js API. Never add `.env.local` or service-role keys to Git. Only the publishable key may be used by the client.
+For a shared feed, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the server-only `SUPABASE_SECRET_KEY`, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `public.claims` table and reads them through the Next.js API. Never add `.env.local` or service-role keys to Git. Only the publishable key may be used by the client.
 
 ## Validation
 
@@ -96,3 +96,4 @@ Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel or expose it to the browser.
 - Original claim text and review history are preserved.
 - Language remains neutral and evidence-first.
 - No submitter account or personal information is required.
+

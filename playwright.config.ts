@@ -19,6 +19,9 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? "github" : "list",
+  // Local dev-server SSR + shared-API roundtrips can exceed Playwright's
+  // default 30s under parallel load (cold Turbopack compiles included).
+  timeout: 60_000,
 
   use: {
     baseURL: BASE_URL,
