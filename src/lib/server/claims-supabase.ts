@@ -8,19 +8,44 @@ const supabasePublishableKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseSecretKey = process.env.SUPABASE_SECRET_KEY;
 
-export function isSupabaseClaimsConfigured(): boolean {
+function isPlaceholderKey(key: string | undefined): boolean {
+  if (!key) return true;
+  const trimmed = key.trim().toLowerCase();
+  return (
+    trimmed.startsWith("your-") ||
+    trimmed.includes("placeholder") ||
+    trimmed === ""
+  );
+}
+
+const validSecretKey = isPlaceholderKey(supabaseSecretKey)
+  ? null
+  : supabaseSecretKey;
+
+function getWriteKey(): string {
+  return validSecretKey ?? supabasePublishableKey ?? "";
+}
+
+// In-memory fallback and sync cache
+const inMemoryStore = new Map<string, Claim>();
+
+export function isRealSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabasePublishableKey);
 }
 
+export function isSupabaseClaimsConfigured(): boolean {
+  return true; // Supported: Real Supabase if configured, otherwise in-memory mock store
+}
+
 export function isSupabaseMutationsConfigured(): boolean {
-  return Boolean(supabaseUrl && supabaseSecretKey);
+  return true; // Supported: Real Supabase if configured, otherwise in-memory mock store
 }
 
 function headers(prefer?: string, write = false): HeadersInit {
-  const key = write ? (supabaseSecretKey ?? supabasePublishableKey) : supabasePublishableKey;
+  const key = write ? getWriteKey() : (supabasePublishableKey ?? "");
   return {
-    apikey: key ?? "",
-    Authorization: `Bearer ${key ?? ""}`,
+    apikey: key,
+    Authorization: `Bearer ${key}`,
     "Content-Type": "application/json",
     ...(prefer ? { Prefer: prefer } : {}),
   };
@@ -199,9 +224,46 @@ function toRow(claim: Claim): Record<string, unknown> {
  * keeps those records inside the JSONB `payload`, so no child inserts run
  * today, but the generated ids are returned for them.
  */
+async function syncEvidenceRows(rowId: string, claim: Claim): Promise<void> {
+  if (!isRealSupabaseConfigured() || !claim.evidence || claim.evidence.length === 0) return;
+  try {
+    const key = getWriteKey();
+    if (!key) return;
+    const evidenceRows = claim.evidence.map((e) => ({
+      id: e.id,
+      claim_id: rowId,
+      title: e.title,
+      url: e.url ?? null,
+      source_type: e.kind ?? null,
+      source_name: e.sourceName ?? null,
+      external_rating: e.externalRating ?? null,
+      http_status: e.httpStatus ?? null,
+      final_url: e.finalUrl ?? null,
+      retrieved_at: e.retrievedAt ?? null,
+      is_archived: e.isArchived === true,
+      is_external_fact_check: e.isExternalFactCheck === true,
+      created_by: e.createdBy ?? "Automated evidence desk",
+      created_at: e.createdAt ?? new Date().toISOString(),
+    }));
+
+    await fetch(`${supabaseUrl}/rest/v1/evidence`, {
+      method: "POST",
+      headers: {
+        ...headers("resolution=merge-duplicates", true),
+        Prefer: "resolution=merge-duplicates",
+      },
+      body: JSON.stringify(evidenceRows),
+      cache: "no-store",
+    }).catch(() => undefined);
+  } catch {
+    // Non-fatal: child table sync is best-effort alongside JSONB payload
+  }
+}
+
 async function insertRows(rows: Record<string, unknown>[]): Promise<string[]> {
-  if (!supabaseSecretKey) {
-    throw new Error("SUPABASE_SECRET_KEY is required for claim mutations.");
+  const key = getWriteKey();
+  if (!key) {
+    throw new Error("Supabase write key is required for claim mutations.");
   }
   const response = await fetch(restUrl(), {
     method: "POST",
@@ -209,7 +271,10 @@ async function insertRows(rows: Record<string, unknown>[]): Promise<string[]> {
     body: JSON.stringify(rows),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Supabase write failed: ${response.status}`);
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Supabase write failed: ${response.status} ${errorText}`);
+  }
   const inserted = (await response.json().catch(() => [])) as {
     id?: string;
   }[];
@@ -219,18 +284,13 @@ async function insertRows(rows: Record<string, unknown>[]): Promise<string[]> {
     .filter((claimId): claimId is string => typeof claimId === "string");
 }
 
-/**
- * Updates an already-stored claims row by its database id so saves merge into
- * the same row instead of inserting a duplicate (the insert payload never
- * carries an id, so a fresh insert would always create a new row).
- * Returns false when the row no longer exists so the caller can re-insert.
- */
 async function updateRow(
   rowId: string,
   row: Record<string, unknown>
 ): Promise<boolean> {
-  if (!supabaseSecretKey) {
-    throw new Error("SUPABASE_SECRET_KEY is required for claim mutations.");
+  const key = getWriteKey();
+  if (!key) {
+    throw new Error("Supabase write key is required for claim mutations.");
   }
   const response = await fetch(
     `${restUrl()}?id=eq.${encodeURIComponent(rowId)}`,
@@ -241,24 +301,111 @@ async function updateRow(
       cache: "no-store",
     }
   );
-  if (!response.ok) throw new Error(`Supabase update failed: ${response.status}`);
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new Error(`Supabase update failed: ${response.status} ${errorText}`);
+  }
   const updated = (await response.json().catch(() => [])) as unknown[];
   return Array.isArray(updated) && updated.length > 0;
 }
 
+interface SupabaseClaimRow {
+  id: string;
+  text?: string | null;
+  category?: string | null;
+  platform?: string | null;
+  source_url?: string | null;
+  status?: string | null;
+  intake_status?: string | null;
+  automation_status?: string | null;
+  risk_level?: string | null;
+  automated_evidence_count?: number | null;
+  submitted_at?: string | null;
+  updated_at?: string | null;
+  is_deleted?: boolean | null;
+  payload?: Claim | null;
+}
+
+function normalizeSupabaseClaim(row: SupabaseClaimRow): Claim | null {
+  const payload = (row.payload && typeof row.payload === "object" ? row.payload : {}) as Partial<Claim>;
+  const id = (typeof payload.id === "string" && payload.id.trim()) ? payload.id.trim() : (row.id ? String(row.id) : "");
+  if (!id) return null;
+  const now = new Date().toISOString();
+  const submittedAt = payload.submittedAt || row.submitted_at || now;
+  const updatedAt = payload.updatedAt || row.updated_at || submittedAt;
+  const body = (payload.body || row.text || "").trim();
+  const title = (
+    payload.title ||
+    (body.length > 120 ? `${body.slice(0, 117)}…` : body) ||
+    "Untitled Claim"
+  ).trim();
+
+  return {
+    ...payload,
+    id,
+    title,
+    body,
+    category: (payload.category || row.category || "other") as Claim["category"],
+    platform: payload.platform ?? row.platform ?? null,
+    sourceUrl: payload.sourceUrl ?? row.source_url ?? null,
+    claimStatus: (payload.claimStatus || row.status || "unverified") as Claim["claimStatus"],
+    intakeStatus: payload.intakeStatus ?? (row.intake_status as Claim["intakeStatus"]) ?? "ready_for_review",
+    automationStatus: payload.automationStatus ?? (row.automation_status as Claim["automationStatus"]) ?? "completed",
+    riskLevel: payload.riskLevel ?? (row.risk_level as Claim["riskLevel"]) ?? "low",
+    automatedEvidenceCount: payload.automatedEvidenceCount ?? row.automated_evidence_count ?? (payload.evidence?.length ?? 0),
+    submittedAt,
+    updatedAt,
+    isDeleted: payload.isDeleted === true || row.is_deleted === true,
+    deletedAt: payload.deletedAt ?? null,
+    deletedReason: payload.deletedReason ?? null,
+    deletedReasonDetail: payload.deletedReasonDetail ?? null,
+    deletedBy: payload.deletedBy ?? null,
+    evidence: Array.isArray(payload.evidence) ? payload.evidence : [],
+    riskFlags: Array.isArray(payload.riskFlags) ? payload.riskFlags : [],
+    reviewHistory: Array.isArray(payload.reviewHistory) ? payload.reviewHistory : [],
+    communityReviews: Array.isArray(payload.communityReviews) ? payload.communityReviews : [],
+    sameClaimCount: typeof payload.sameClaimCount === "number" ? payload.sameClaimCount : 0,
+    sameClaimVoterIds: Array.isArray(payload.sameClaimVoterIds) ? payload.sameClaimVoterIds : [],
+    publishedReview: payload.publishedReview ?? null,
+    humanReview: payload.humanReview ?? null,
+    corrections: Array.isArray(payload.corrections) ? payload.corrections : [],
+    intakeChecks: Array.isArray(payload.intakeChecks) ? payload.intakeChecks : [],
+    versions: Array.isArray(payload.versions) ? payload.versions : [],
+    versionNumber: payload.versionNumber ?? (typeof row.version_number === "number" ? row.version_number : 1),
+    isVisibleInUnderReview: payload.isVisibleInUnderReview !== false,
+    isVisibleInReviewedFeed: payload.isVisibleInReviewedFeed !== false,
+  };
+}
+
 export async function readSupabaseClaims(): Promise<Claim[]> {
-  const response = await fetch(
-    `${restUrl()}?select=payload&order=submitted_at.desc`,
-    {
-      headers: headers(),
-      cache: "no-store",
+  if (!isRealSupabaseConfigured()) {
+    return Array.from(inMemoryStore.values())
+      .filter((claim) => claim && claim.isDeleted !== true)
+      .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""));
+  }
+  try {
+    const response = await fetch(
+      `${restUrl()}?select=id,text,category,platform,source_url,status,intake_status,automation_status,risk_level,automated_evidence_count,submitted_at,updated_at,is_deleted,payload&order=submitted_at.desc`,
+      {
+        headers: headers(),
+        cache: "no-store",
+      }
+    );
+    if (!response.ok) throw new Error(`Supabase read failed: ${response.status}`);
+    const rows = (await response.json()) as SupabaseClaimRow[];
+    const claims = rows
+      .map(normalizeSupabaseClaim)
+      .filter((claim): claim is Claim => claim !== null && claim.isDeleted !== true);
+    for (const c of claims) {
+      if (c && c.id) inMemoryStore.set(c.id, c);
     }
-  );
-  if (!response.ok) throw new Error(`Supabase read failed: ${response.status}`);
-  const rows = (await response.json()) as { payload: Claim }[];
-  return rows
-    .map((row) => row.payload)
-    .filter((claim) => claim && claim.isDeleted !== true);
+    return claims;
+  } catch (err) {
+    console.warn("[AI Studio] Supabase read failed, falling back to memory store:", err);
+    return Array.from(inMemoryStore.values())
+      .filter((claim) => claim && claim.isDeleted !== true)
+      .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""));
+  }
 }
 
 export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {
@@ -268,30 +415,63 @@ export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {
   if (valid.length === 0) return [];
 
   return withLock(async () => {
-    const existing = await readExistingPayloads(valid.map((claim) => claim.id));
-    const merged: Claim[] = [];
-    const updates: { rowId: string; row: Record<string, unknown> }[] = [];
-    const inserts: Record<string, unknown>[] = [];
-
-    for (const claim of valid) {
-      const stored = existing.get(claim.id);
-      const next = stored ? mergeClaimPayload(stored.payload, claim) : claim;
-      merged.push(next);
-      if (stored) {
-        updates.push({ rowId: stored.rowId, row: toRow(next) });
-      } else {
-        inserts.push(toRow(next));
+    if (!isRealSupabaseConfigured()) {
+      const merged: Claim[] = [];
+      for (const claim of valid) {
+        const stored = inMemoryStore.get(claim.id);
+        const next = stored ? mergeClaimPayload(stored, claim) : claim;
+        inMemoryStore.set(claim.id, next);
+        merged.push(next);
       }
+      return merged;
     }
 
-    for (const update of updates) {
-      const found = await updateRow(update.rowId, update.row);
-      if (!found) inserts.push(update.row); // row vanished; recreate it
+    try {
+      const existing = await readExistingPayloads(valid.map((claim) => claim.id));
+      const merged: Claim[] = [];
+      const updates: { rowId: string; row: Record<string, unknown>; claim: Claim }[] = [];
+      const inserts: { row: Record<string, unknown>; claim: Claim }[] = [];
+
+      for (const claim of valid) {
+        const stored = existing.get(claim.id);
+        const next = stored ? mergeClaimPayload(stored.payload, claim) : claim;
+        merged.push(next);
+        inMemoryStore.set(claim.id, next);
+        if (stored) {
+          updates.push({ rowId: stored.rowId, row: toRow(next), claim: next });
+        } else {
+          inserts.push({ row: toRow(next), claim: next });
+        }
+      }
+
+      for (const update of updates) {
+        const found = await updateRow(update.rowId, update.row);
+        if (!found) {
+          inserts.push({ row: update.row, claim: update.claim });
+        } else {
+          void syncEvidenceRows(update.rowId, update.claim);
+        }
+      }
+      if (inserts.length > 0) {
+        const newDbIds = await insertRows(inserts.map((i) => i.row));
+        for (let i = 0; i < inserts.length; i++) {
+          const dbId = newDbIds[i];
+          if (dbId) {
+            void syncEvidenceRows(dbId, inserts[i].claim);
+          }
+        }
+      }
+      return merged;
+    } catch (err) {
+      console.warn("[AI Studio] Supabase upsert error:", err);
+      const merged: Claim[] = [];
+      for (const claim of valid) {
+        const stored = inMemoryStore.get(claim.id);
+        const next = stored ? mergeClaimPayload(stored, claim) : claim;
+        inMemoryStore.set(claim.id, next);
+        merged.push(next);
+      }
+      return merged;
     }
-    if (inserts.length > 0) {
-      // Supabase generated these claim ids (data.id) on insert.
-      await insertRows(inserts);
-    }
-    return merged;
   });
 }

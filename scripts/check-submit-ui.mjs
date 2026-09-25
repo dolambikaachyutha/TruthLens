@@ -8,7 +8,7 @@ const shots = path.join(os.tmpdir(), "vq-shots");
 fs.mkdirSync(shots, { recursive: true });
 
 const problems = [];
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ channel: process.env.PW_CHANNEL, headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.on("console", (m) => {
   if (m.type() === "error") problems.push(`console.error: ${m.text()}`);

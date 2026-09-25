@@ -50,9 +50,24 @@ export function useClaim(id: string | null): Claim | undefined {
   const bootstrapped = useRef(false);
 
   useEffect(() => {
-    if (bootstrapped.current) return;
-    bootstrapped.current = true;
-    void bootstrapSharedClaims();
+    if (!bootstrapped.current) {
+      bootstrapped.current = true;
+      void bootstrapSharedClaims();
+    }
+
+    const interval = window.setInterval(() => {
+      void refreshSharedClaims();
+    }, REFRESH_MS);
+
+    const onFocus = () => {
+      void refreshSharedClaims();
+    };
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   return useSyncExternalStore(

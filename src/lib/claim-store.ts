@@ -51,6 +51,14 @@ function normalizeIntakeStatus(claim: Claim): IntakeStatus {
 
 function migrateClaim(raw: Partial<Claim> & { id: string }): Claim {
   const claim = raw as Claim;
+  const now = new Date().toISOString();
+  const submittedAt = claim.submittedAt || now;
+  const updatedAt = claim.updatedAt || submittedAt;
+  const body = claim.body || (claim as unknown as { text?: string }).text || "";
+  const title =
+    claim.title ||
+    (body.length > 120 ? `${body.slice(0, 117)}…` : body) ||
+    "Untitled Claim";
   const automationStatus = legacyAutomationStatus(claim.automationStatus);
   const intakeStatus = normalizeIntakeStatus({
     ...claim,
@@ -78,12 +86,19 @@ function migrateClaim(raw: Partial<Claim> & { id: string }): Claim {
     : null;
   return {
     ...claim,
+    title,
+    body,
+    submittedAt,
+    updatedAt,
+    category: claim.category || "other",
+    claimStatus: claim.claimStatus || "unverified",
+    riskLevel: claim.riskLevel || "low",
     automationStatus,
     intakeStatus,
     publishedReview,
-    intakeChecks: claim.intakeChecks ?? [],
-    corrections: claim.corrections ?? [],
-    versions: claim.versions ?? [],
+    intakeChecks: Array.isArray(claim.intakeChecks) ? claim.intakeChecks : [],
+    corrections: Array.isArray(claim.corrections) ? claim.corrections : [],
+    versions: Array.isArray(claim.versions) ? claim.versions : [],
     isVisibleInUnderReview: claim.isVisibleInUnderReview !== false,
     isVisibleInReviewedFeed: claim.isVisibleInReviewedFeed !== false,
     sameClaimCount: typeof claim.sameClaimCount === "number" ? claim.sameClaimCount : 0,
@@ -96,9 +111,9 @@ function migrateClaim(raw: Partial<Claim> & { id: string }): Claim {
     deletedReasonDetail: claim.deletedReasonDetail ?? null,
     deletedBy: claim.deletedBy ?? null,
     versionNumber: claim.versionNumber ?? 1,
-    evidence: claim.evidence ?? [],
-    riskFlags: claim.riskFlags ?? [],
-    reviewHistory: claim.reviewHistory ?? [],
+    evidence: Array.isArray(claim.evidence) ? claim.evidence : [],
+    riskFlags: Array.isArray(claim.riskFlags) ? claim.riskFlags : [],
+    reviewHistory: Array.isArray(claim.reviewHistory) ? claim.reviewHistory : [],
     communityReviews: Array.isArray(claim.communityReviews)
       ? claim.communityReviews.filter(
           (review) =>
@@ -143,7 +158,7 @@ export function hydrateClaims(claims: Claim[]): void {
   const normalized = claims
     .filter((claim) => claim && typeof claim.id === "string")
     .map((claim) => migrateClaim(claim))
-    .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+    .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""));
   cache = normalized;
   notify(normalized);
   setSharedFeedStatus("ready");

@@ -25,7 +25,7 @@ function assert(condition, label) {
 
 const text = `Shared feed check ${Date.now()}`;
 
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ channel: process.env.PW_CHANNEL, headless: true });
 
 // ── Browser A: submit a claim ──────────────────────────────────────────────
 const ctxA = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

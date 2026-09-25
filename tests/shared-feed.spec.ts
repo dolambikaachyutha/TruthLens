@@ -25,8 +25,8 @@ test("Browser A and Browser B share submissions, reviews, support, and deletes",
   const now = new Date().toISOString();
   const claim = {
     id: claimId,
-    title: "Cross-browser shared TruthLens claim",
-    body: "Cross-browser shared TruthLens claim for the public feed test.",
+    title: `Cross-browser shared TruthLens claim ${claimId}`,
+    body: `Cross-browser shared TruthLens claim for the public feed test ${claimId}.`,
     category: "other",
     platform: "Other",
     sourceUrl: null,
@@ -160,8 +160,8 @@ test("Community reviews are shared across browsers and append-only", async ({
       return result.status;
     }, {
       id: claimId,
-      title: "Cross-browser shared review claim",
-      body: "Cross-browser shared review claim for the append-only review test.",
+      title: `Cross-browser shared review claim ${claimId}`,
+      body: `Cross-browser shared review claim for the append-only review test ${claimId}.`,
       category: "other",
       platform: "Other",
       sourceUrl: null,
@@ -202,7 +202,7 @@ test("Community reviews are shared across browsers and append-only", async ({
     await expect(pageA.getByTestId("community-review-author-1")).toHaveText(
       "Reviewed by Community reviewer"
     );
-    await expect(pageA.getByText(noteOne)).toBeVisible();
+    await expect(pageA.getByTestId("community-reviews-panel").getByText(noteOne)).toBeVisible();
     expect(await waitForReviewCount(pageA, claimId, 1)).toBeGreaterThanOrEqual(1);
 
     // Browser B (separate session) sees the same review in the feed and detail.
@@ -211,7 +211,7 @@ test("Community reviews are shared across browsers and append-only", async ({
       pageB.getByTestId(`community-review-count-${claimId}`)
     ).toHaveText("Reviews (1)");
     await pageB.goto(`${BASE_URL}/claims/${claimId}`);
-    await expect(pageB.getByText(noteOne)).toBeVisible();
+    await expect(pageB.getByTestId("community-reviews-panel").getByText(noteOne)).toBeVisible();
     await expect(pageB.getByTestId("detail-add-review")).toHaveText(
       "Add another review"
     );
@@ -223,8 +223,8 @@ test("Community reviews are shared across browsers and append-only", async ({
     await expect(pageB.getByTestId("community-reviews-count")).toHaveText(
       "Reviews (2)"
     );
-    await expect(pageB.getByText(noteOne)).toBeVisible();
-    await expect(pageB.getByText(noteTwo)).toBeVisible();
+    await expect(pageB.getByTestId("community-reviews-panel").getByText(noteOne)).toBeVisible();
+    await expect(pageB.getByTestId("community-reviews-panel").getByText(noteTwo)).toBeVisible();
     await expect(pageB.getByTestId("community-review-number-1")).toBeVisible();
     await expect(pageB.getByTestId("community-review-number-2")).toBeVisible();
     expect(await waitForReviewCount(pageA, claimId, 2)).toBeGreaterThanOrEqual(2);
@@ -234,8 +234,8 @@ test("Community reviews are shared across browsers and append-only", async ({
     await expect(pageA.getByTestId("community-reviews-count")).toHaveText(
       "Reviews (2)"
     );
-    await expect(pageA.getByText(noteOne)).toBeVisible();
-    await expect(pageA.getByText(noteTwo)).toBeVisible();
+    await expect(pageA.getByTestId("community-reviews-panel").getByText(noteOne)).toBeVisible();
+    await expect(pageA.getByTestId("community-reviews-panel").getByText(noteTwo)).toBeVisible();
     const authorOne = await pageA
       .getByTestId("community-review-author-1")
       .textContent();

@@ -104,25 +104,27 @@ function matchesFilters(
 
 function sortClaims(claims: Claim[], sort: SortValue): Claim[] {
   const list = [...claims];
+  const cmpDate = (d1?: string, d2?: string) => (d1 ?? "").localeCompare(d2 ?? "");
   switch (sort) {
     case "same_claim":
       return list.sort(
         (a, b) =>
           (b.sameClaimCount ?? 0) - (a.sameClaimCount ?? 0) ||
-          b.submittedAt.localeCompare(a.submittedAt)
+          cmpDate(b.submittedAt, a.submittedAt)
       );
     case "oldest":
-      return list.sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
+      return list.sort((a, b) => cmpDate(a.submittedAt, b.submittedAt));
     case "updated":
-      return list.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      return list.sort((a, b) => cmpDate(b.updatedAt, a.updatedAt));
     case "risk":
       return list.sort(
-        (a, b) => RISK_RANK[b.riskLevel] - RISK_RANK[a.riskLevel] ||
-          b.submittedAt.localeCompare(a.submittedAt)
+        (a, b) =>
+          (RISK_RANK[b.riskLevel] ?? 0) - (RISK_RANK[a.riskLevel] ?? 0) ||
+          cmpDate(b.submittedAt, a.submittedAt)
       );
     case "newest":
     default:
-      return list.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+      return list.sort((a, b) => cmpDate(b.submittedAt, a.submittedAt));
   }
 }
 

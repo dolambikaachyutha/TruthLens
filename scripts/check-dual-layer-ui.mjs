@@ -13,7 +13,7 @@ const shots = path.join(os.tmpdir(), "vq-shots", "dual-layer");
 fs.mkdirSync(shots, { recursive: true });
 
 const problems = [];
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ channel: process.env.PW_CHANNEL, headless: true });
 const context = await browser.newContext({
   viewport: { width: 1440, height: 1100 },
 });
@@ -307,7 +307,7 @@ await page.unroute("**/api/evidence").catch(() => {});
 async function waitForAutomationIdle(timeout = 40000) {
   await page
     .waitForFunction(
-      () => {
+      async () => {
         const response = await fetch("/api/claims", { cache: "no-store" });
         const list = await response.json();
         return list.every(
