@@ -371,7 +371,10 @@ export function createClaim(input: CreateClaimInput): Claim {
     intakeCompletedAt: null,
     intakeError: null,
     isVisibleInUnderReview: true,
-    isVisibleInReviewedFeed: true,
+    // New unverified claims are NOT visible in the Reviewed feed.
+    // isVisibleInReviewedFeed is only flipped to true when a reviewer publishes
+    // a verdict and marks quality checks as passed.
+    isVisibleInReviewedFeed: false,
     sameClaimCount: 0,
     sameClaimVoterIds: [],
     isDeleted: false,
