@@ -41,17 +41,9 @@ export function isVisibleInUnderReview(claim: Claim): boolean {
 }
 
 /** Clearly labeled processing claims (intake still running). */
-export function isIntakeProcessing(claim: Claim): boolean {
-  if (isDeletedClaim(claim)) return false;
-  if (!isUnderReviewStatus(claim.claimStatus)) return false;
-  if (claim.publishedReview) return false;
-  return (
-    claim.intakeStatus === "submitted" ||
-    claim.intakeStatus === "checking" ||
-    claim.automationStatus === "queued" ||
-    claim.automationStatus === "running" ||
-    claim.automationStatus === "not_started"
-  );
+export function isIntakeProcessing(_claim: Claim): boolean {
+  void _claim;
+  return false;
 }
 
 export function isIntakeBlockedOrFailed(claim: Claim): boolean {

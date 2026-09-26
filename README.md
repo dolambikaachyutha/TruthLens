@@ -13,7 +13,6 @@ TruthLens is a public civic-tech platform for triaging potentially misleading cl
 
 - Accepts claims with their original wording preserved.
 - Runs neutral risk analysis for signals such as sensational language, shouting, and missing sources.
-- Provides optional source reachability, metadata, Wayback, duplicate, and fact-check checks.
 - Gives reviewers a public workflow for evidence notes, confidence, quality checks, and status history.
 - Lets any visitor add an independent review from the feed; multiple reviewers may each record one assessment without publishing an official verdict.
 - Provides a searchable feed with category, status, risk, platform, date, evidence, and sorting filters.
@@ -63,7 +62,7 @@ GOOGLE_FACTCHECK_API_KEY=
 FACTCHECK_API_URL=
 ```
 
-For a shared feed, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the server-only `SUPABASE_SECRET_KEY`, then run the migration in `supabase/migrations/` (or `supabase/schema.sql`) in the Supabase SQL editor. `public.claims` is the canonical source of truth; there is no browser-only or process-memory fallback. Submissions carry one idempotency key, original text is immutable, and independent reviews are append-only. Claim lifecycle state is separate from factual status. Never add `.env.local` or service-role keys to Git. Only the publishable key may be used by the client.
+For a shared feed, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the server-only `SUPABASE_SECRET_KEY`, then run the migration in `supabase/migrations/` (or `supabase/schema.sql`) in the Supabase SQL editor. `public.claims` is the canonical source of truth; there is no browser-only or process-memory fallback. Submissions carry one idempotency key, original text is immutable, and independent reviews are append-only. Claims wait for human review; no automated evidence or verdict workflow runs. Never add `.env.local` or service-role keys to Git. Only the publishable key may be used by the client.
 
 Before running shared-feed or deletion tests against an existing Supabase project, apply `supabase/migrations/20260926000002_claim_submission_safeguards.sql` and refresh the PostgREST schema cache. Without these columns, `/api/claims` intentionally returns `503` rather than writing claims without the idempotency safeguard.
 

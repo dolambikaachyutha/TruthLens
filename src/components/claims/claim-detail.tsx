@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import {
@@ -11,7 +11,6 @@ import {
   ExternalLinkIcon,
   FlagIcon,
   QuoteIcon,
-  RefreshCwIcon,
   ThumbsUpIcon,
   UsersIcon,
 } from "lucide-react";
@@ -21,7 +20,6 @@ import {
   RiskLevelBadge,
   StatusBadge,
 } from "@/components/claims/badges";
-import { AutomationPanel } from "@/components/claims/automation-panel";
 import { CommunityReviewDialog } from "@/components/claims/community-review-dialog";
 import { CommunityReviewsPanel } from "@/components/claims/community-reviews-panel";
 import { HistoryTimeline } from "@/components/claims/history-timeline";
@@ -35,7 +33,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { useAutomation } from "@/hooks/use-automation";
 import { useClaim, useSharedFeedStatus } from "@/hooks/use-claims";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { addCorrection, hasVotedSameClaim, voteSameClaim } from "@/lib/claim-store";
@@ -43,7 +40,6 @@ import { DeleteClaimButton } from "@/components/claims/delete-claim-button";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import {
   EVIDENCE_STRENGTH_META,
-  INTAKE_STATUS_META,
   REVIEW_CONFIDENCE_META,
   STATUS_META,
 } from "@/lib/meta";
@@ -51,7 +47,6 @@ import {
 export function ClaimDetail({ id }: { id: string }) {
   const claim = useClaim(id);
   const { status: feedStatus, retry } = useSharedFeedStatus();
-  const { runAutomation, runningId } = useAutomation();
   const hydrated = useHydrated();
   const reduceMotion = useReducedMotion();
   const [reportOpen, setReportOpen] = useState(false);
@@ -59,10 +54,6 @@ export function ClaimDetail({ id }: { id: string }) {
   const [reportUrl, setReportUrl] = useState("");
   const [sameVoted, setSameVoted] = useState(false);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
-
-  const retryAutomation = useCallback(() => {
-    if (claim) void runAutomation(claim.id);
-  }, [claim, runAutomation]);
 
   const sameCount = claim?.sameClaimCount ?? 0;
   const alreadyVoted =
@@ -153,7 +144,6 @@ export function ClaimDetail({ id }: { id: string }) {
   }
 
   const statusMeta = STATUS_META[claim.claimStatus];
-  const intakeMeta = INTAKE_STATUS_META[claim.intakeStatus];
   const findings = [...claim.reviewHistory]
     .filter(
       (entry) =>
@@ -163,7 +153,6 @@ export function ClaimDetail({ id }: { id: string }) {
   const evidenceNotes = claim.reviewHistory.filter(
     (entry) => entry.action === "evidence_note"
   );
-  const automationBusy = runningId === claim.id;
   const published = claim.publishedReview;
 
   return (
@@ -188,12 +177,6 @@ export function ClaimDetail({ id }: { id: string }) {
           <StatusBadge status={claim.claimStatus} />
           <CategoryBadge category={claim.category} />
           <RiskLevelBadge level={claim.riskLevel} />
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase"
-            data-testid="detail-intake-status"
-          >
-            Intake: {intakeMeta.label}
-          </span>
           {!published && claim.claimStatus === "unverified" && (
             <span className="text-[11px] font-medium text-muted-foreground">
               Awaiting human review
@@ -318,18 +301,6 @@ export function ClaimDetail({ id }: { id: string }) {
               </div>
             </dl>
           </section>
-
-          <AutomationPanel
-            claim={claim}
-            busy={automationBusy}
-            onRetry={
-              claim.automationStatus === "failed" ||
-              claim.automationStatus === "queued" ||
-              claim.automationStatus === "not_started"
-                ? retryAutomation
-                : undefined
-            }
-          />
 
           <HumanReviewPanel claim={claim} />
 
@@ -631,15 +602,6 @@ export function ClaimDetail({ id }: { id: string }) {
               <ArrowLeftIcon aria-hidden className="size-4" />
               Back to claims feed
             </Link>
-            <button
-              type="button"
-              onClick={retryAutomation}
-              className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-cyan-deep hover:underline"
-              data-testid="retry-evidence"
-            >
-              <RefreshCwIcon aria-hidden className="size-3.5" />
-              Re-run evidence gathering
-            </button>
           </div>
         </div>
 
@@ -660,19 +622,9 @@ export function ClaimDetail({ id }: { id: string }) {
                 {statusMeta.description}
               </p>
             </div>
-            <div className="mt-3 flex items-start gap-3">
-              <span
-                className={`mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${intakeMeta.badgeClass}`}
-              >
-                {intakeMeta.label}
-              </span>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {intakeMeta.description}
-              </p>
-            </div>
             <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
               Statuses are recorded by human reviewers against traceable
-              evidence. Automation never assigns a status.
+              evidence. Risk signals never assign a status.
             </p>
           </div>
 
