@@ -31,6 +31,7 @@ test("Browser A and Browser B share submissions, reviews, support, and deletes",
     platform: "Other",
     sourceUrl: null,
     claimStatus: "unverified",
+    lifecycleState: "under_review",
     intakeStatus: "ready_for_review",
     automationStatus: "completed",
     automatedEvidenceCount: 0,
@@ -52,6 +53,8 @@ test("Browser A and Browser B share submissions, reviews, support, and deletes",
     submittedAt: now,
     updatedAt: now,
     versionNumber: 1,
+    idempotencyKey: `e2e-idempotency-${claimId}`,
+    normalizedFingerprint: claimId.toLowerCase(),
   };
 
   try {
@@ -166,6 +169,7 @@ test("Community reviews are shared across browsers and append-only", async ({
       platform: "Other",
       sourceUrl: null,
       claimStatus: "unverified",
+      lifecycleState: "under_review",
       intakeStatus: "ready_for_review",
       automationStatus: "completed",
       automatedEvidenceCount: 0,
@@ -187,6 +191,8 @@ test("Community reviews are shared across browsers and append-only", async ({
       submittedAt: now,
       updatedAt: now,
       versionNumber: 1,
+      idempotencyKey: `e2e-review-idempotency-${claimId}`,
+      normalizedFingerprint: claimId.toLowerCase(),
     });
     expect(created).toBe(200);
 

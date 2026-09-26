@@ -357,6 +357,7 @@ export interface CreateClaimInput {
   riskFlags: RiskFlag[];
   riskLevel: RiskLevel;
   platform?: string | null;
+  idempotencyKey?: string;
 }
 
 export function createClaim(input: CreateClaimInput): Claim {
@@ -374,6 +375,7 @@ export function createClaim(input: CreateClaimInput): Claim {
     platform: input.platform ?? null,
     sourceUrl: input.sourceUrl,
     claimStatus: "unverified",
+    lifecycleState: "submitted",
     intakeStatus: "submitted",
     automationStatus: "queued",
     automatedEvidenceCount: 0,
@@ -414,8 +416,11 @@ export function createClaim(input: CreateClaimInput): Claim {
     humanReview: null,
     publishedReview: null,
     communityReviews: [],
+    idempotencyKey: input.idempotencyKey,
+    normalizedFingerprint: trimmed.toLowerCase().replace(/\s+/g, " "),
+    submitterDeletionToken: crypto.randomUUID().replaceAll("-", ""),
   };
-  return saveClaim(claim);
+  return claim;
 }
 
 export function setEvidence(

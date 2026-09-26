@@ -5,6 +5,18 @@ export type ClaimStatus =
   | "verified_false"
   | "misleading";
 
+export type LifecycleState =
+  | "submitted"
+  | "duplicate_check"
+  | "intake_checking"
+  | "under_review"
+  | "needs_context"
+  | "blocked"
+  | "published_review"
+  | "correction_pending"
+  | "corrected"
+  | "soft_deleted";
+
 export type ClaimCategory = "politics" | "health" | "finance" | "other";
 
 export type RiskLevel = "high" | "medium" | "low";
@@ -237,6 +249,7 @@ export interface Claim {
   context?: string | null;
   sourceUrl: string | null;
   claimStatus: ClaimStatus;
+  lifecycleState?: LifecycleState;
   intakeStatus: IntakeStatus;
   automationStatus: AutomationStatus;
   automatedEvidenceCount: number;
@@ -266,6 +279,9 @@ export interface Claim {
   humanReview: HumanReview | null;
   publishedReview: PublishedReview | null;
   communityReviews: CommunityReview[];
+  idempotencyKey?: string;
+  normalizedFingerprint?: string;
+  submitterDeletionToken?: string;
 }
 
 export interface ClaimSubmission {

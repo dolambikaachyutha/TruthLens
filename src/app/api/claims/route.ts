@@ -12,6 +12,12 @@ export const dynamic = "force-dynamic";
 
 const noStore = { "Cache-Control": "no-store" };
 
+function withoutDeletionToken<T extends object>(claim: T): Omit<T, "submitterDeletionToken"> {
+  const safeClaim = { ...claim } as T & { submitterDeletionToken?: string };
+  delete safeClaim.submitterDeletionToken;
+  return safeClaim;
+}
+
 export async function GET() {
   if (!isSupabaseClaimsConfigured()) {
     return NextResponse.json(
@@ -54,7 +60,7 @@ export async function POST(request: Request) {
     );
     try {
       const saved = await upsertSupabaseClaims(claims);
-      return NextResponse.json(saved, { headers: noStore });
+      return NextResponse.json(saved.map(withoutDeletionToken), { headers: noStore });
     } catch {
       return NextResponse.json(
         { error: "Unable to save shared claims." },
@@ -73,7 +79,7 @@ export async function POST(request: Request) {
 
   try {
     const saved = await upsertSupabaseClaims([incoming]);
-    return NextResponse.json(saved[0], { headers: noStore });
+    return NextResponse.json(withoutDeletionToken(saved[0]), { headers: noStore });
   } catch {
     return NextResponse.json(
       { error: "Unable to save shared claim." },

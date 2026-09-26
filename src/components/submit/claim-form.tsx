@@ -95,6 +95,7 @@ export function ClaimForm() {
       riskFlags: analysis.flags as RiskFlag[],
       riskLevel: analysis.riskLevel as RiskLevel,
       platform: values.platform,
+      idempotencyKey: crypto.randomUUID(),
     });
 
     const queued: Claim = {
@@ -291,6 +292,29 @@ export function ClaimForm() {
           gathering references — it will not change this status. Flags below
           are triage signals — not truth judgments.
         </p>
+        {lastClaim.submitterDeletionToken && (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-white/70 p-4 text-sm text-emerald-900">
+            <p className="font-semibold">Private deletion token</p>
+            <p className="mt-1 text-xs text-emerald-800/80">
+              Save this token. It is shown once and is required to request deletion.
+            </p>
+            <code className="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-xs">
+              {lastClaim.submitterDeletionToken}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              className="mt-2 h-8 bg-white text-xs"
+              onClick={() => {
+                void navigator.clipboard.writeText(lastClaim.submitterDeletionToken ?? "");
+                toast.success("Deletion token copied.");
+              }}
+              data-testid="copy-deletion-token"
+            >
+              Copy deletion token
+            </Button>
+          </div>
+        )}
         <blockquote className="mt-4 rounded-lg border border-emerald-200 bg-white/70 p-4 text-sm text-navy">
           “{lastClaim.body}”
         </blockquote>

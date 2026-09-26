@@ -17,7 +17,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 1,
   reporter: process.env.CI ? "github" : "list",
   // Local dev-server SSR + shared-API roundtrips can exceed Playwright's
   // default 30s under parallel load (cold Turbopack compiles included).

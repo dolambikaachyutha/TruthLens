@@ -18,6 +18,8 @@ create table if not exists public.claims (
   context                     text,
   status                      text        not null default 'unverified'
     check (status in ('unverified','in_review','verified_true','verified_false','misleading')),
+  lifecycle_state             text        not null default 'submitted'
+    check (lifecycle_state in ('submitted','duplicate_check','intake_checking','under_review','needs_context','blocked','published_review','correction_pending','corrected','soft_deleted')),
   intake_status               text        not null default 'submitted'
     check (intake_status in ('submitted','checking','ready_for_review','needs_more_context','blocked','failed')),
   automation_status           text        not null default 'queued'
@@ -40,6 +42,10 @@ create table if not exists public.claims (
   submitted_at                timestamptz not null default now(),
   updated_at                  timestamptz not null default now(),
   version_number              integer     not null default 1
+  ,idempotency_key             text
+  ,normalized_fingerprint      text
+  ,submitter_token_hash        text
+  ,delete_requested_at         timestamptz
 );
 
 -- Idempotent column additions for pre-existing deployments.
@@ -51,6 +57,11 @@ alter table public.claims add column if not exists deleted_by                  t
 alter table public.claims add column if not exists payload                     jsonb       not null default '{}'::jsonb;
 alter table public.claims add column if not exists is_visible_in_under_review  boolean     not null default true;
 alter table public.claims add column if not exists is_visible_in_reviewed_feed boolean     not null default false;
+alter table public.claims add column if not exists lifecycle_state text not null default 'submitted';
+alter table public.claims add column if not exists idempotency_key text;
+alter table public.claims add column if not exists normalized_fingerprint text;
+alter table public.claims add column if not exists submitter_token_hash text;
+alter table public.claims add column if not exists delete_requested_at timestamptz;
 
 -- Backfill is_deleted from JSONB payload for rows inserted before this column existed.
 update public.claims c
@@ -193,6 +204,9 @@ create index if not exists claims_intake_idx           on public.claims(intake_s
 create index if not exists claims_submitted_idx        on public.claims(submitted_at desc);
 create index if not exists claims_public_feed_idx      on public.claims(submitted_at desc) where is_deleted = false;
 create index if not exists claims_is_deleted_idx       on public.claims(is_deleted);
+create unique index if not exists claims_idempotency_key_unique on public.claims(idempotency_key) where idempotency_key is not null;
+create index if not exists claims_fingerprint_idx on public.claims(normalized_fingerprint);
+create index if not exists claims_lifecycle_idx on public.claims(lifecycle_state);
 create index if not exists risk_flags_claim_idx        on public.risk_flags(claim_id);
 create index if not exists intake_checks_claim_idx     on public.intake_checks(claim_id);
 create index if not exists evidence_claim_idx          on public.evidence(claim_id);

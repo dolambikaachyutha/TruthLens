@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Claim } from "@/lib/types";
 
 const supabaseUrl =
@@ -34,11 +35,11 @@ export function isRealSupabaseConfigured(): boolean {
 }
 
 export function isSupabaseClaimsConfigured(): boolean {
-  return true; // Supported: Real Supabase if configured, otherwise in-memory mock store
+  return isRealSupabaseConfigured();
 }
 
 export function isSupabaseMutationsConfigured(): boolean {
-  return true; // Supported: Real Supabase if configured, otherwise in-memory mock store
+  return isRealSupabaseConfigured() && Boolean(getWriteKey());
 }
 
 function headers(prefer?: string, write = false): HeadersInit {
@@ -192,10 +193,16 @@ async function readExistingPayloads(
   return map;
 }
 
+function hashDeletionToken(token: string): string {
+  return createHash("sha256").update(token.trim()).digest("hex");
+}
+
 function toRow(claim: Claim): Record<string, unknown> {
   // No `id` field: Supabase creates it (`claims.id` default
   // `gen_random_uuid()::text`) and returns it from the insert.
-  return {
+  const publicClaim = { ...claim };
+  delete publicClaim.submitterDeletionToken;
+  const row: Record<string, unknown> = {
     text: claim.body,
     platform: claim.platform ?? null,
     category: claim.category,
@@ -211,10 +218,87 @@ function toRow(claim: Claim): Record<string, unknown> {
     is_visible_in_under_review: claim.isVisibleInUnderReview,
     is_visible_in_reviewed_feed: claim.isVisibleInReviewedFeed,
     is_deleted: claim.isDeleted === true,
-    payload: claim,
+    payload: publicClaim,
     submitted_at: claim.submittedAt,
     updated_at: claim.updatedAt,
+    idempotency_key: claim.idempotencyKey ?? null,
+    lifecycle_state: claim.lifecycleState ?? "submitted",
+    normalized_fingerprint: claim.normalizedFingerprint ?? null,
   };
+  if (claim.submitterDeletionToken) {
+    row.submitter_token_hash = hashDeletionToken(claim.submitterDeletionToken);
+  }
+  return row;
+}
+
+export async function softDeleteClaim(
+  claimId: string,
+  deletionToken: string,
+  reason: string,
+  reasonDetail: string
+): Promise<boolean> {
+  if (!isRealSupabaseConfigured()) throw new Error("Supabase is required for deletion.");
+  const response = await fetch(
+    `${restUrl()}?payload->>id=eq.${encodeURIComponent(claimId)}&select=id,payload,submitter_token_hash&limit=1`,
+    { headers: headers(), cache: "no-store" }
+  );
+  if (!response.ok) throw new Error(`Supabase deletion lookup failed: ${response.status}`);
+  const rows = (await response.json()) as {
+    id: string;
+    payload: Claim;
+    submitter_token_hash?: string | null;
+  }[];
+  const row = rows[0];
+  if (!row || !row.submitter_token_hash || row.submitter_token_hash !== hashDeletionToken(deletionToken)) {
+    return false;
+  }
+  if (row.payload.isDeleted || row.payload.publishedReview) return false;
+  const now = new Date().toISOString();
+  const next: Claim = {
+    ...row.payload,
+    isDeleted: true,
+    deletedAt: now,
+    deletedReason: reason as Claim["deletedReason"],
+    deletedReasonDetail: reasonDetail || null,
+    deletedBy: "Verified submitter",
+    lifecycleState: "soft_deleted",
+    isVisibleInUnderReview: false,
+    isVisibleInReviewedFeed: false,
+    updatedAt: now,
+    submitterDeletionToken: undefined,
+    reviewHistory: [
+      ...row.payload.reviewHistory,
+      {
+        id: `rev-del-${Date.now().toString(36)}`,
+        action: "deleted",
+        author: "Verified submitter",
+        note: `Submitter requested deletion: ${reason}${reasonDetail ? ` (${reasonDetail})` : ""}.`,
+        createdAt: now,
+      },
+    ],
+  };
+  return updateRow(row.id, {
+    ...toRow(next),
+    submitter_token_hash: row.submitter_token_hash,
+    is_deleted: true,
+    deleted_at: now,
+    deleted_reason: reason,
+    deleted_reason_detail: reasonDetail || null,
+    deleted_by: "Verified submitter",
+  });
+}
+
+async function readExistingByIdempotencyKey(
+  keyValue: string
+): Promise<StoredClaimRow | null> {
+  const response = await fetch(
+    `${restUrl()}?idempotency_key=eq.${encodeURIComponent(keyValue)}&select=id,payload&limit=1`,
+    { headers: headers(), cache: "no-store" }
+  );
+  if (!response.ok) throw new Error(`Supabase idempotency read failed: ${response.status}`);
+  const rows = (await response.json()) as { id: string; payload: Claim }[];
+  const row = rows[0];
+  return row?.id && row.payload ? { rowId: row.id, payload: row.payload } : null;
 }
 
 /**
@@ -324,6 +408,8 @@ interface SupabaseClaimRow {
   updated_at?: string | null;
   version_number?: number | null;
   is_deleted?: boolean | null;
+  lifecycle_state?: string | null;
+  idempotency_key?: string | null;
   payload?: Claim | null;
 }
 
@@ -350,6 +436,7 @@ function normalizeSupabaseClaim(row: SupabaseClaimRow): Claim | null {
     platform: payload.platform ?? row.platform ?? null,
     sourceUrl: payload.sourceUrl ?? row.source_url ?? null,
     claimStatus: (payload.claimStatus || row.status || "unverified") as Claim["claimStatus"],
+    lifecycleState: payload.lifecycleState ?? (row.lifecycle_state as Claim["lifecycleState"]) ?? "submitted",
     intakeStatus: payload.intakeStatus ?? (row.intake_status as Claim["intakeStatus"]) ?? "ready_for_review",
     automationStatus: payload.automationStatus ?? (row.automation_status as Claim["automationStatus"]) ?? "completed",
     riskLevel: payload.riskLevel ?? (row.risk_level as Claim["riskLevel"]) ?? "low",
@@ -375,14 +462,14 @@ function normalizeSupabaseClaim(row: SupabaseClaimRow): Claim | null {
     versionNumber: payload.versionNumber ?? (typeof row.version_number === "number" ? row.version_number : 1),
     isVisibleInUnderReview: payload.isVisibleInUnderReview !== false,
     isVisibleInReviewedFeed: payload.isVisibleInReviewedFeed !== false,
+    idempotencyKey: payload.idempotencyKey ?? row.idempotency_key ?? undefined,
+    normalizedFingerprint: payload.normalizedFingerprint ?? undefined,
   };
 }
 
 export async function readSupabaseClaims(): Promise<Claim[]> {
   if (!isRealSupabaseConfigured()) {
-    return Array.from(inMemoryStore.values())
-      .filter((claim) => claim && claim.isDeleted !== true)
-      .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""));
+    throw new Error("Supabase is required for the shared claims feed.");
   }
   try {
     const response = await fetch(
@@ -402,10 +489,8 @@ export async function readSupabaseClaims(): Promise<Claim[]> {
     }
     return claims;
   } catch (err) {
-    console.warn("[AI Studio] Supabase read failed, falling back to memory store:", err);
-    return Array.from(inMemoryStore.values())
-      .filter((claim) => claim && claim.isDeleted !== true)
-      .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""));
+    console.warn("[TruthLens] Supabase read failed:", err);
+    throw err;
   }
 }
 
@@ -417,18 +502,16 @@ export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {
 
   return withLock(async () => {
     if (!isRealSupabaseConfigured()) {
-      const merged: Claim[] = [];
-      for (const claim of valid) {
-        const stored = inMemoryStore.get(claim.id);
-        const next = stored ? mergeClaimPayload(stored, claim) : claim;
-        inMemoryStore.set(claim.id, next);
-        merged.push(next);
-      }
-      return merged;
+      throw new Error("Supabase is required for claim mutations.");
     }
 
     try {
       const existing = await readExistingPayloads(valid.map((claim) => claim.id));
+      for (const claim of valid) {
+        if (!claim.idempotencyKey) continue;
+        const prior = await readExistingByIdempotencyKey(claim.idempotencyKey);
+        if (prior) return [prior.payload];
+      }
       const merged: Claim[] = [];
       const updates: { rowId: string; row: Record<string, unknown>; claim: Claim }[] = [];
       const inserts: { row: Record<string, unknown>; claim: Claim }[] = [];
@@ -464,15 +547,8 @@ export async function upsertSupabaseClaims(claims: Claim[]): Promise<Claim[]> {
       }
       return merged;
     } catch (err) {
-      console.warn("[AI Studio] Supabase upsert error:", err);
-      const merged: Claim[] = [];
-      for (const claim of valid) {
-        const stored = inMemoryStore.get(claim.id);
-        const next = stored ? mergeClaimPayload(stored, claim) : claim;
-        inMemoryStore.set(claim.id, next);
-        merged.push(next);
-      }
-      return merged;
+      console.warn("[TruthLens] Supabase upsert error:", err);
+      throw err;
     }
   });
 }

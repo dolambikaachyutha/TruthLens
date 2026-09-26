@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Trash2Icon, AlertTriangleIcon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
-import { deleteClaim } from "@/lib/claim-store";
 import { DELETE_REASON_LABELS } from "@/lib/meta";
 import { DELETE_REASONS, type DeleteReason } from "@/lib/types";
 
@@ -23,6 +22,7 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
   const [deleting, setDeleting] = useState(false);
   const [reason, setReason] = useState<DeleteReason>("test_submission");
   const [reasonDetail, setReasonDetail] = useState("");
+  const [deletionToken, setDeletionToken] = useState("");
 
   async function handleDelete() {
     if (reason === "other" && reasonDetail.trim().length < 5) {
@@ -30,12 +30,15 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
       return;
     }
     setDeleting(true);
-    await new Promise((r) => setTimeout(r, 300));
-    const ok = deleteClaim(claimId, { reason, reasonDetail });
-    if (ok) {
+    const response = await fetch("/api/claims/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claimId, deletionToken, reason, reasonDetail }),
+    });
+    if (response.ok) {
       toast.success("Claim removed from the public feed", {
         description:
-          "Record kept for audit. This public demo delete has no sign-in — production requires authenticated moderators.",
+          "The original record remains available for audit.",
       });
       if (onDeleted) {
         onDeleted();
@@ -48,7 +51,7 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
       return;
     } else {
       toast.error("Could not delete this claim", {
-        description: "Published claims cannot be deleted, or it is already gone.",
+        description: "Provide the deletion token shown after submission.",
       });
     }
     setDeleting(false);
@@ -120,9 +123,20 @@ export function DeleteClaimButton({ claimId, onDeleted }: DeleteClaimButtonProps
             )}
 
             <p className="text-[11px] text-red-800/90">
-              Public demo delete — no sign-in. Production deletion should require
-              authenticated moderator permissions.
+              Enter the private token shown after submission. Production should
+              also require authenticated moderation for sensitive claims.
             </p>
+
+            <label className="flex flex-col gap-1 text-xs font-medium text-red-900">
+              Deletion token
+              <input
+                type="password"
+                value={deletionToken}
+                onChange={(e) => setDeletionToken(e.target.value)}
+                className="h-9 rounded-md border border-red-200 bg-white px-2 text-sm text-navy"
+                data-testid="delete-claim-token"
+              />
+            </label>
 
             <div className="flex flex-wrap gap-2">
               <button

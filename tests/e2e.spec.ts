@@ -233,6 +233,7 @@ test.describe("Delete claim — two-step confirmation", () => {
       category: "Politics",
     });
     await page.getByRole("button", { name: /submit claim/i }).click();
+    const deletionToken = await page.locator("code").last().textContent();
     await page.getByTestId("view-claim").click();
 
     // Delete button must be present on unverified claims
@@ -243,6 +244,7 @@ test.describe("Delete claim — two-step confirmation", () => {
     await deleteBtn.click();
     await expect(page.getByTestId("delete-claim-confirm")).toBeVisible();
     await expect(page.getByTestId("delete-claim-cancel")).toBeVisible();
+    await page.getByTestId("delete-claim-token").fill(deletionToken?.trim() ?? "");
   });
 
   test("Cancel dismisses the confirmation panel", async ({ page }) => {
@@ -252,9 +254,11 @@ test.describe("Delete claim — two-step confirmation", () => {
       category: "Health",
     });
     await page.getByRole("button", { name: /submit claim/i }).click();
+    const deletionToken = await page.locator("code").last().textContent();
     await page.getByTestId("view-claim").click();
 
     await page.getByTestId("delete-claim-btn").click();
+    await page.getByTestId("delete-claim-token").fill(deletionToken?.trim() ?? "");
     await page.getByTestId("delete-claim-cancel").click();
 
     // Confirm panel gone; primary delete button is back
@@ -269,9 +273,11 @@ test.describe("Delete claim — two-step confirmation", () => {
       category: "Finance",
     });
     await page.getByRole("button", { name: /submit claim/i }).click();
+    const deletionToken = await page.locator("code").last().textContent();
     await page.getByTestId("view-claim").click();
 
     await page.getByTestId("delete-claim-btn").click();
+    await page.getByTestId("delete-claim-token").fill(deletionToken?.trim() ?? "");
     await page.getByTestId("delete-claim-confirm").click();
 
     // After deletion the user should land on /feed

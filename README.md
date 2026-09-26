@@ -1,13 +1,10 @@
-HACKATHON_ID: AZIS-BZRR67
-For a deployed shared feed, set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `public.claims` table and reads them through the Next.js API. The public feed is shared across visitors through Supabase. Browser localStorage is not the source of truth; it is used only for demo session identification and temporary UI state. Never add `.env.local` or service-role keys to Git. Only the public anon key may be used by the client.
-6. **Shared storage on Vercel:** run `supabase/schema.sql` and set both Supabase environment variables before deploying. Vercel then uses the persistent `public.claims` table for the shared feed.
 # TruthLens
 
 **See the signal. Follow the evidence.**
 
 TruthLens is a public civic-tech platform for triaging potentially misleading claims. People can submit claims, inspect neutral risk signals, review available evidence, and record human review outcomes.
 
-**Hackathon ID:** `[HACKATHON_ID_PLACEHOLDER]`  
+**Hackathon ID:** `AZIS-BZRR67`  
 **Authentication:** None. Login and signup are not required.  
 **Automated verdicts:** Never. Risk analysis identifies presentation signals; it does not label a claim true or false.  
 **External standard API:** Not implemented. The `/api/*` routes are internal Next.js handlers for evidence checks.
@@ -66,7 +63,9 @@ GOOGLE_FACTCHECK_API_KEY=
 FACTCHECK_API_URL=
 ```
 
-For a shared feed, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the server-only `SUPABASE_SECRET_KEY`, then run `supabase/schema.sql` in the Supabase SQL editor. The app stores the complete claim records in the `public.claims` table and reads them through the Next.js API. Never add `.env.local` or service-role keys to Git. Only the publishable key may be used by the client.
+For a shared feed, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the server-only `SUPABASE_SECRET_KEY`, then run the migration in `supabase/migrations/` (or `supabase/schema.sql`) in the Supabase SQL editor. `public.claims` is the canonical source of truth; there is no browser-only or process-memory fallback. Submissions carry one idempotency key, original text is immutable, and independent reviews are append-only. Claim lifecycle state is separate from factual status. Never add `.env.local` or service-role keys to Git. Only the publishable key may be used by the client.
+
+Before running shared-feed or deletion tests against an existing Supabase project, apply `supabase/migrations/20260926000002_claim_submission_safeguards.sql` and refresh the PostgREST schema cache. Without these columns, `/api/claims` intentionally returns `503` rather than writing claims without the idempotency safeguard.
 
 ## Validation
 
@@ -74,6 +73,8 @@ For a shared feed, set `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and the serve
 npm run lint
 npm run build
 npm run test:e2e
+npx playwright install chromium
+npx playwright test --project=chromium
 ```
 
 The production build must pass before deployment. Playwright may require its browser binaries to be installed in a new environment.
@@ -85,7 +86,7 @@ The production build must pass before deployment. Playwright may require its bro
 3. Leave the framework as **Next.js** and use `npm run build` as the build command.
 4. Add any required variables from `.env.example` under **Project Settings > Environment Variables**.
 5. Deploy. Vercel will use `vercel.json` for the build settings and security headers. The public feed is shared across visitors through Supabase. Browser localStorage is not the source of truth; it is used only for demo session identification and temporary UI state.
-6. **Shared storage on Vercel:** run `supabase/schema.sql` and set both Supabase environment variables before deploying. Vercel then uses the persistent `public.claims` table for the shared feed.
+6. **Shared storage on Vercel:** run the canonical migration and set the Supabase URL, publishable/anon key, and server-only secret key before deploying. Vercel then uses the persistent `public.claims` table for the shared feed.
 
 Do not add `SUPABASE_SERVICE_ROLE_KEY` to Vercel or expose it to the browser.
 

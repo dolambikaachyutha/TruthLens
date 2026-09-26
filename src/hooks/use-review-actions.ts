@@ -30,6 +30,7 @@ export function useReviewActions() {
     const next: Claim = {
       ...claim,
       claimStatus: "in_review",
+      lifecycleState: "under_review",
       humanReview: {
         reviewerLabel: COMMUNITY_REVIEWER,
         startedAt: now,
@@ -90,6 +91,7 @@ export function useReviewActions() {
         const next: Claim = {
           ...claim,
           claimStatus: input.verdict,
+          lifecycleState: "published_review",
           humanReview: claim.humanReview ?? {
             reviewerLabel: COMMUNITY_REVIEWER,
             startedAt: now,
