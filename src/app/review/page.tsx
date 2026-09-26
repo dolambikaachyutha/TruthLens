@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import { InfoIcon } from "lucide-react";
 import { ReviewWorkspace } from "@/components/review/review-workspace";
-import { HUMAN_REVIEW_MESSAGE } from "@/lib/automation";
+import {
+  AUTOMATION_DISCLAIMER,
+  HUMAN_REVIEW_MESSAGE,
+} from "@/lib/automation";
 import { RISK_FLAG_DISCLAIMER } from "@/lib/meta";
 
 export const metadata: Metadata = {
   title: "Reviewer workspace",
   description:
-    "Human review workspace for original claims and risk signals. No login required.",
+    "Dual-layer review: automated evidence desk plus human final verdicts. No login required.",
 };
 
 export default function ReviewPage() {
@@ -23,7 +26,7 @@ export default function ReviewPage() {
               Reviewer workspace
             </h1>
             <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-              Inspect the original claim and risk signals, then publish a human verdict as{" "}
+              Inspect automated evidence, then publish a human verdict as{" "}
               <strong className="text-foreground">Community reviewer</strong>.
               Original text is never edited — reviewers only append to the
               history.
@@ -39,7 +42,7 @@ export default function ReviewPage() {
             </p>
             <p className="flex gap-2 rounded-lg border border-border bg-card px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
               <InfoIcon aria-hidden className="mt-0.5 size-3.5 shrink-0 text-cyan-deep" />
-              Risk signals are triage aids only. Reviewers must assess evidence themselves.
+              {AUTOMATION_DISCLAIMER}
             </p>
           </div>
         </header>

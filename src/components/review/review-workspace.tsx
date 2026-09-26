@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
+  BotIcon,
   ExternalLinkIcon,
   FileTextIcon,
   PlusIcon,
@@ -24,9 +25,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAutomation } from "@/hooks/use-automation";
 import { useClaims } from "@/hooks/use-claims";
 import { useReviewActions } from "@/hooks/use-review-actions";
 import {
+  AUTOMATION_DISCLAIMER,
   COMMUNITY_REVIEWER,
   HUMAN_REVIEW_MESSAGE,
   MIN_ANALYSIS_FIELD_LENGTH,
@@ -34,7 +37,9 @@ import {
 } from "@/lib/automation";
 import { formatDate } from "@/lib/format";
 import {
+  AUTOMATION_STATUS_META,
   EVIDENCE_STRENGTH_META,
+  INTAKE_STATUS_META,
   REVIEW_CONFIDENCE_META,
 } from "@/lib/meta";
 import type {
@@ -98,6 +103,7 @@ function tabMatches(tab: QueueTab, claim: Claim): boolean {
 
 export function ReviewWorkspace() {
   const claims = useClaims();
+  const { runAutomation, runningId } = useAutomation();
   const { startReview, publishVerdict, appendEvidenceNote, busy } =
     useReviewActions();
   const [tab, setTab] = useState<QueueTab>("triage");
@@ -116,6 +122,20 @@ export function ReviewWorkspace() {
   const [locationChecked, setLocationChecked] = useState(false);
   const [scopeChecked, setScopeChecked] = useState(false);
   const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    const pending = claims.filter(
+      (c) =>
+        !c.isDeleted &&
+        (c.automationStatus === "queued" ||
+          c.automationStatus === "not_started") &&
+        c.publishedReview == null &&
+        runningId !== c.id
+    );
+    for (const claim of pending) {
+      void runAutomation(claim.id);
+    }
+  }, [claims, runAutomation, runningId]);
 
   const queue = useMemo(
     () =>
@@ -298,7 +318,8 @@ export function ReviewWorkspace() {
                         {claim.title}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {claim.category} · {claim.riskFlags.length} signals
+                        {claim.category} · {claim.riskFlags.length} signals ·{" "}
+                        {claim.automatedEvidenceCount} evidence
                       </p>
                     </button>
                   </motion.li>
@@ -364,11 +385,48 @@ export function ReviewWorkspace() {
                 <span>{selected.body}</span>
               </blockquote>
 
-              <div className="rounded-lg border border-border p-4">
+              <div
+                className="rounded-lg border border-border p-4"
+                data-testid="review-automation-summary"
+              >
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-navy">
+                    <BotIcon aria-hidden className="size-4 text-cyan-deep" />
+                    Automated evidence desk
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        AUTOMATION_STATUS_META[selected.automationStatus]
+                          .badgeClass
+                      )}
+                      data-testid="queue-automation-status"
+                    >
+                      {AUTOMATION_STATUS_META[selected.automationStatus].label}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase",
+                        INTAKE_STATUS_META[selected.intakeStatus].badgeClass
+                      )}
+                      data-testid="queue-intake-status"
+                    >
+                      {INTAKE_STATUS_META[selected.intakeStatus].label}
+                    </span>
+                  </div>
+                </div>
                 <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-                  Risk signals help prioritize review. They are not factual verdicts.
+                  {selected.automatedEvidenceCount} evidence record
+                  {selected.automatedEvidenceCount === 1 ? "" : "s"} ·{" "}
+                  {AUTOMATION_DISCLAIMER}
                 </p>
                 <RiskFlagList flags={selected.riskFlags} />
+                {runningId === selected.id && (
+                  <p className="mt-2 text-xs text-cyan-deep" role="status">
+                    Processing evidence jobs…
+                  </p>
+                )}
               </div>
 
               <div

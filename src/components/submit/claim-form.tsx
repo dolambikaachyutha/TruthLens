@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RiskAnalysisPanel } from "@/components/submit/risk-analysis-panel";
 import { RiskLevelBadge } from "@/components/claims/badges";
 import { DeleteClaimButton } from "@/components/claims/delete-claim-button";
+import { useAutomation } from "@/hooks/use-automation";
 import { CATEGORY_OPTIONS, RISK_LEVEL_META } from "@/lib/meta";
 import { PLATFORM_OPTIONS, PLATFORM_PLACEHOLDER } from "@/lib/platform-meta";
 import { analyzeClaim } from "@/lib/risk-analysis";
@@ -37,6 +38,7 @@ export function ClaimForm() {
   >([]);
   const [pendingValues, setPendingValues] = useState<ClaimFormValues | null>(null);
   const [votedMatchId, setVotedMatchId] = useState<string | null>(null);
+  const { runAutomation } = useAutomation();
 
   const {
     register,
@@ -96,8 +98,12 @@ export function ClaimForm() {
       idempotencyKey: crypto.randomUUID(),
     });
 
-    saveClaim(claim);
-    setLastClaim(claim);
+    const queued: Claim = {
+      ...claim,
+      automationStatus: "queued",
+    };
+    saveClaim(queued);
+    setLastClaim(queued);
     setSimilarMatches([]);
     setPendingValues(null);
     setVotedMatchId(null);
@@ -108,6 +114,9 @@ export function ClaimForm() {
       } · ${RISK_LEVEL_META[analysis.riskLevel].label} · status Unverified`,
     });
 
+    runAutomation(queued.id).catch((err: unknown) => {
+      console.error("[VerityQueue] Automation error for claim", queued.id, err);
+    });
   }
 
   function voteOnMatch(matchId: string) {
@@ -279,7 +288,8 @@ export function ClaimForm() {
           Claim submitted to the shared feed
         </h2>
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-emerald-800/80">
-          Stored on the shared public queue — visible to everyone. Status: <strong>Unverified</strong>. A human reviewer will assess the claim. Flags below
+          Stored on the shared public queue — visible to everyone. Status: <strong>Unverified</strong>. The automated evidence desk is
+          gathering references — it will not change this status. Flags below
           are triage signals — not truth judgments.
         </p>
         {lastClaim.submitterDeletionToken && (
