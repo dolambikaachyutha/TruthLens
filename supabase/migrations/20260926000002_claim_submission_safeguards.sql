@@ -21,3 +21,5 @@ create index if not exists claims_lifecycle_state_idx
 
 revoke update on public.claims from anon, authenticated;
 revoke delete on public.claims from anon, authenticated;
+
+notify pgrst, 'reload schema';

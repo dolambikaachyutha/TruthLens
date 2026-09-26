@@ -20,11 +20,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { RiskAnalysisPanel } from "@/components/submit/risk-analysis-panel";
 import { RiskLevelBadge } from "@/components/claims/badges";
 import { DeleteClaimButton } from "@/components/claims/delete-claim-button";
-import { useAutomation } from "@/hooks/use-automation";
 import { CATEGORY_OPTIONS, RISK_LEVEL_META } from "@/lib/meta";
 import { PLATFORM_OPTIONS, PLATFORM_PLACEHOLDER } from "@/lib/platform-meta";
 import { analyzeClaim } from "@/lib/risk-analysis";
-import { createClaim, findSimilarForVote, saveClaim, voteSameClaim } from "@/lib/claim-store";
+import {
+  createClaim,
+  findSimilarForVote,
+  saveClaim,
+  syncClaimToServer,
+  voteSameClaim,
+} from "@/lib/claim-store";
 import { claimFormSchema, type ClaimFormValues } from "@/lib/validation";
 import type { Claim, ClaimCategory, RiskFlag, RiskLevel } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -38,8 +43,6 @@ export function ClaimForm() {
   >([]);
   const [pendingValues, setPendingValues] = useState<ClaimFormValues | null>(null);
   const [votedMatchId, setVotedMatchId] = useState<string | null>(null);
-  const { runAutomation } = useAutomation();
-
   const {
     register,
     control,
@@ -81,7 +84,14 @@ export function ClaimForm() {
       return;
     }
 
-    await createNewClaim(values);
+    try {
+      await createNewClaim(values);
+    } catch (error) {
+      toast.error("Claim could not be saved to the shared feed.", {
+        description:
+          error instanceof Error ? error.message : "Please try again.",
+      });
+    }
   }
 
   async function createNewClaim(values: ClaimFormValues) {
@@ -98,12 +108,9 @@ export function ClaimForm() {
       idempotencyKey: crypto.randomUUID(),
     });
 
-    const queued: Claim = {
-      ...claim,
-      automationStatus: "queued",
-    };
-    saveClaim(queued);
-    setLastClaim(queued);
+    await syncClaimToServer(claim);
+    saveClaim(claim, { sync: false });
+    setLastClaim(claim);
     setSimilarMatches([]);
     setPendingValues(null);
     setVotedMatchId(null);
@@ -114,9 +121,6 @@ export function ClaimForm() {
       } · ${RISK_LEVEL_META[analysis.riskLevel].label} · status Unverified`,
     });
 
-    runAutomation(queued.id).catch((err: unknown) => {
-      console.error("[VerityQueue] Automation error for claim", queued.id, err);
-    });
   }
 
   function voteOnMatch(matchId: string) {

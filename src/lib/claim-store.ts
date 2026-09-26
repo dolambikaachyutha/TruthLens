@@ -164,19 +164,19 @@ export function hydrateClaims(claims: Claim[]): void {
   setSharedFeedStatus("ready");
 }
 
-async function syncClaimToServer(claim: Claim): Promise<void> {
+export async function syncClaimToServer(claim: Claim): Promise<void> {
   if (typeof window === "undefined") return;
-  try {
-    await fetch("/api/claims", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(claim),
-      cache: "no-store",
-    });
-    await refreshSharedClaims();
-  } catch {
-    // The next scheduled refresh will reconcile the memory cache.
+  const response = await fetch("/api/claims", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(claim),
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(data?.error ?? `Claim save failed (${response.status}).`);
   }
+  await refreshSharedClaims();
 }
 
 async function fetchSharedClaims(): Promise<Claim[] | null> {
@@ -253,7 +253,7 @@ export function getStoredClaim(id: string): Claim | undefined {
   return readAll().find((claim) => claim.id === id);
 }
 
-export function saveClaim(claim: Claim): Claim {
+export function saveClaim(claim: Claim, options?: { sync?: boolean }): Claim {
   const claims = [...readAll()];
   const index = claims.findIndex((c) => c.id === claim.id);
   if (index >= 0) {
@@ -264,7 +264,7 @@ export function saveClaim(claim: Claim): Claim {
   claims.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   cache = claims;
   notify(claims);
-  void syncClaimToServer(claim);
+  if (options?.sync !== false) void syncClaimToServer(claim).catch(() => undefined);
   return claim;
 }
 
